@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="작업 목록">
+        <div class="brand">
+          <span class="brand-mark">T</span>
+          <div>
+            <h1>Todo Dashboard</h1>
+            <p>로컬 작업 관리</p>
+          </div>
+        </div>
+
+        <form class="list-form" id="list-form">
+          <input id="list-name" type="text" placeholder="새 목록 이름" autocomplete="off" />
+          <button type="submit" aria-label="목록 추가">+</button>
+        </form>
+
+        <nav class="list-nav" id="list-nav"></nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">현재 목록</p>
+            <h2 id="current-list-title">기본</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" id="seed-button" type="button">샘플</button>
+            <button class="danger-button" id="reset-button" type="button">초기화</button>
+          </div>
+        </header>
+
+        <section class="metrics" aria-label="작업 현황">
+          <article class="metric progress-metric">
+            <div class="ring" id="progress-ring" style="--progress: 0%">
+              <span id="progress-value">0%</span>
+            </div>
+            <div>
+              <h3>완료율</h3>
+              <p id="progress-copy">진행할 작업이 없습니다.</p>
+            </div>
+          </article>
+          <article class="metric">
+            <span class="metric-value" id="total-count">0</span>
+            <h3>전체 작업</h3>
+          </article>
+          <article class="metric">
+            <span class="metric-value" id="active-count">0</span>
+            <h3>진행중</h3>
+          </article>
+          <article class="metric">
+            <span class="metric-value" id="overdue-count">0</span>
+            <h3>기한 지남</h3>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <form class="task-form" id="task-form">
+            <h3 id="form-title">할 일 추가</h3>
+            <input type="hidden" id="editing-id" />
+            <label>
+              제목
+              <input id="task-title" type="text" autocomplete="off" required />
+            </label>
+            <label>
+              설명
+              <textarea id="task-description" rows="3"></textarea>
+            </label>
+            <div class="form-row">
+              <label>
+                마감일
+                <input id="task-due" type="datetime-local" />
+              </label>
+              <label>
+                반복
+                <select id="task-repeat">
+                  <option value="none">없음</option>
+                  <option value="daily">매일</option>
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-actions">
+              <button class="primary-button" type="submit">저장</button>
+              <button class="ghost-button" id="cancel-edit" type="button">취소</button>
+            </div>
+          </form>
+
+          <section class="visual-panel" aria-label="시각화">
+            <div class="panel-heading">
+              <h3>시각화</h3>
+              <p id="visual-summary">작업을 추가하면 분포가 표시됩니다.</p>
+            </div>
+            <div class="bar-chart" id="due-chart"></div>
+            <div class="list-progress" id="list-progress"></div>
+          </section>
+        </section>
+
+        <section class="task-board" aria-label="할 일 목록">
+          <div class="board-heading">
+            <h3>작업</h3>
+            <select id="filter-select" aria-label="작업 필터">
+              <option value="all">전체</option>
+              <option value="active">진행중</option>
+              <option value="completed">완료</option>
+              <option value="overdue">기한 지남</option>
+            </select>
+          </div>
+          <div class="tasks" id="tasks"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="task-template">
+      <article class="task-item">
+        <div class="task-main">
+          <button class="check-button" type="button" aria-label="완료 변경"></button>
+          <div class="task-text">
+            <h4></h4>
+            <p class="description"></p>
+            <div class="task-meta"></div>
+          </div>
+        </div>
+        <div class="subtasks"></div>
+        <form class="subtask-form">
+          <input type="text" placeholder="하위 작업" autocomplete="off" />
+          <button type="submit">추가</button>
+        </form>
+        <div class="task-actions">
+          <button type="button" data-action="edit">수정</button>
+          <button type="button" data-action="delete">삭제</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
