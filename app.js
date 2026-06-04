@@ -1,4 +1,29 @@
-const STORAGE_KEY = "todo-dashboard-data";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  getFirestore,
+  serverTimestamp,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBbFev0N1eTUho_4d8XXsraORwGzQI1fIE",
+  authDomain: "todolist-48036.firebaseapp.com",
+  projectId: "todolist-48036",
+  storageBucket: "todolist-48036.firebasestorage.app",
+  messagingSenderId: "846233876514",
+  appId: "1:846233876514:web:74202d88724671de27727b",
+  measurementId: "G-FS5TMK6GYX",
+};
+
 const repeatLabels = {
   none: "반복 없음",
   daily: "매일",
@@ -16,9 +41,20 @@ const defaultData = {
   ],
 };
 
-let state = loadState();
+let state = structuredClone(defaultData);
+let auth = null;
+let db = null;
+let currentUser = null;
+let isSaving = false;
 
 const elements = {
+  authUser: document.querySelector("#auth-user"),
+  userAvatar: document.querySelector("#user-avatar"),
+  userName: document.querySelector("#user-name"),
+  userEmail: document.querySelector("#user-email"),
+  authMessage: document.querySelector("#auth-message"),
+  loginButton: document.querySelector("#login-button"),
+  logoutButton: document.querySelector("#logout-button"),
   listForm: document.querySelector("#list-form"),
   listName: document.querySelector("#list-name"),
   listNav: document.querySelector("#list-nav"),
@@ -47,7 +83,29 @@ const elements = {
   resetButton: document.querySelector("#reset-button"),
 };
 
-elements.listForm.addEventListener("submit", (event) => {
+elements.loginButton.addEventListener("click", async () => {
+  if (!auth) {
+    setAuthMessage("Firebase 설정을 먼저 입력하세요.");
+    return;
+  }
+
+  try {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error(error);
+    setAuthMessage("Google 로그인에 실패했습니다. Firebase 설정과 허용 도메인을 확인하세요.");
+  }
+});
+
+elements.logoutButton.addEventListener("click", async () => {
+  if (!auth) {
+    return;
+  }
+  await signOut(auth);
+});
+
+elements.listForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = elements.listName.value.trim();
   if (!name || state.lists.some((list) => list.name === name)) {
@@ -57,10 +115,10 @@ elements.listForm.addEventListener("submit", (event) => {
   state.lists.push({ name, todos: [] });
   state.currentListName = name;
   elements.listName.value = "";
-  saveAndRender();
+  await saveAndRender();
 });
 
-elements.taskForm.addEventListener("submit", (event) => {
+elements.taskForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const title = elements.taskTitle.value.trim();
   if (!title) {
@@ -89,40 +147,172 @@ elements.taskForm.addEventListener("submit", (event) => {
   }
 
   resetTaskForm();
-  saveAndRender();
+  await saveAndRender();
 });
 
 elements.cancelEdit.addEventListener("click", resetTaskForm);
 elements.filterSelect.addEventListener("change", render);
 elements.seedButton.addEventListener("click", seedData);
-elements.resetButton.addEventListener("click", () => {
+elements.resetButton.addEventListener("click", async () => {
   if (!confirm("저장된 웹 데이터를 초기화할까요?")) {
     return;
   }
   state = structuredClone(defaultData);
-  saveAndRender();
+  await saveAndRender();
 });
 
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) {
-    return structuredClone(defaultData);
+function initializeFirebase() {
+  if (!isFirebaseConfigured()) {
+    setAuthMessage("app.js의 firebaseConfig 값을 Firebase Console 설정으로 교체하세요.");
+    setAppEnabled(false);
+    render();
+    return;
   }
 
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+
+  setAppEnabled(false);
+  setAuthMessage("로그인 상태를 확인하는 중입니다.");
+
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
+    if (!user) {
+      state = structuredClone(defaultData);
+      renderSignedOut();
+      render();
+      return;
+    }
+
+    renderSignedIn(user);
+    setAuthMessage("할 일 목록을 불러오는 중입니다.");
+    state = await loadUserState(user.uid);
+    setAuthMessage("Google 계정에 저장됩니다.");
+    setAppEnabled(true);
+    render();
+  });
+}
+
+function isFirebaseConfigured() {
+  return Object.values(firebaseConfig).every((value) => value && !value.startsWith("YOUR_"));
+}
+
+async function loadUserState(uid) {
   try {
-    const parsed = JSON.parse(saved);
-    if (!Array.isArray(parsed.lists) || parsed.lists.length === 0) {
+    const snapshot = await getDoc(userTodoDoc(uid));
+    if (!snapshot.exists()) {
       return structuredClone(defaultData);
     }
-    return parsed;
-  } catch {
+    return normalizeState(snapshot.data());
+  } catch (error) {
+    console.error(error);
+    setAuthMessage("데이터를 불러오지 못했습니다. 네트워크와 Firestore 권한을 확인하세요.");
     return structuredClone(defaultData);
   }
 }
 
-function saveAndRender() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+async function saveAndRender() {
   render();
+  if (!currentUser || !db) {
+    setAuthMessage("로그인 후 저장할 수 있습니다.");
+    return;
+  }
+
+  try {
+    isSaving = true;
+    setAuthMessage("저장 중입니다.");
+    await setDoc(userTodoDoc(currentUser.uid), {
+      currentListName: state.currentListName,
+      lists: state.lists,
+      updatedAt: serverTimestamp(),
+    });
+    setAuthMessage("저장되었습니다.");
+  } catch (error) {
+    console.error(error);
+    setAuthMessage("저장에 실패했습니다. Firestore 권한과 네트워크를 확인하세요.");
+  } finally {
+    isSaving = false;
+  }
+}
+
+function userTodoDoc(uid) {
+  return doc(db, "users", uid, "todoData", "main");
+}
+
+function normalizeState(data) {
+  if (!data || !Array.isArray(data.lists) || data.lists.length === 0) {
+    return structuredClone(defaultData);
+  }
+
+  const lists = data.lists.map((list) => ({
+    name: String(list.name || "기본"),
+    todos: Array.isArray(list.todos)
+      ? list.todos.map((todo) => ({
+          id: Number(todo.id),
+          title: String(todo.title || ""),
+          description: String(todo.description || ""),
+          dueAt: String(todo.dueAt || ""),
+          repeat: repeatLabels[todo.repeat] ? todo.repeat : "none",
+          completed: Boolean(todo.completed),
+          subtasks: Array.isArray(todo.subtasks)
+            ? todo.subtasks.map((subtask) => ({
+                id: Number(subtask.id),
+                title: String(subtask.title || ""),
+                completed: Boolean(subtask.completed),
+              }))
+            : [],
+        }))
+      : [],
+  }));
+
+  const currentListName = lists.some((list) => list.name === data.currentListName)
+    ? data.currentListName
+    : lists[0].name;
+
+  return { currentListName, lists };
+}
+
+function setAppEnabled(enabled) {
+  [
+    elements.listName,
+    elements.listForm.querySelector("button"),
+    elements.taskTitle,
+    elements.taskDescription,
+    elements.taskDue,
+    elements.taskRepeat,
+    elements.taskForm.querySelector(".primary-button"),
+    elements.cancelEdit,
+    elements.filterSelect,
+    elements.seedButton,
+    elements.resetButton,
+  ].forEach((element) => {
+    element.disabled = !enabled;
+  });
+}
+
+function renderSignedIn(user) {
+  const displayName = user.displayName || "Google 사용자";
+  elements.userAvatar.textContent = displayName.charAt(0).toUpperCase();
+  elements.userName.textContent = displayName;
+  elements.userEmail.textContent = user.email || "이메일 정보 없음";
+  elements.loginButton.hidden = true;
+  elements.logoutButton.hidden = false;
+  setAppEnabled(false);
+}
+
+function renderSignedOut() {
+  elements.userAvatar.textContent = "?";
+  elements.userName.textContent = "로그인이 필요합니다";
+  elements.userEmail.textContent = "Google 계정으로 동기화";
+  elements.loginButton.hidden = false;
+  elements.logoutButton.hidden = true;
+  setAuthMessage("로그인하면 계정별 할 일 목록을 저장하고 불러옵니다.");
+  setAppEnabled(false);
+}
+
+function setAuthMessage(message) {
+  elements.authMessage.textContent = message;
 }
 
 function currentList() {
@@ -153,9 +343,9 @@ function renderLists() {
     button.type = "button";
     button.className = list.name === currentList().name ? "active" : "";
     button.innerHTML = `<strong>${escapeHtml(list.name)}</strong><span>${list.todos.length}</span>`;
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       state.currentListName = list.name;
-      saveAndRender();
+      await saveAndRender();
     });
     elements.listNav.append(button);
   });
@@ -245,7 +435,7 @@ function renderTasks() {
     renderTaskMeta(item.querySelector(".task-meta"), todo);
     renderSubtasks(item.querySelector(".subtasks"), todo);
 
-    item.querySelector(".subtask-form").addEventListener("submit", (event) => {
+    item.querySelector(".subtask-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const input = event.currentTarget.querySelector("input");
       const title = input.value.trim();
@@ -254,7 +444,7 @@ function renderTasks() {
       }
       todo.subtasks.push({ id: nextSubtaskId(todo), title, completed: false });
       input.value = "";
-      saveAndRender();
+      await saveAndRender();
     });
 
     item.querySelector('[data-action="edit"]').addEventListener("click", () => startEdit(todo));
@@ -324,7 +514,7 @@ function filterTodos(todos) {
   return todos;
 }
 
-function toggleTodo(id) {
+async function toggleTodo(id) {
   const todo = currentList().todos.find((item) => item.id === id);
   if (!todo) {
     return;
@@ -335,7 +525,7 @@ function toggleTodo(id) {
   } else {
     todo.completed = !todo.completed;
   }
-  saveAndRender();
+  await saveAndRender();
 }
 
 function startEdit(todo) {
@@ -348,10 +538,10 @@ function startEdit(todo) {
   elements.taskTitle.focus();
 }
 
-function deleteTodo(id) {
+async function deleteTodo(id) {
   const list = currentList();
   list.todos = list.todos.filter((todo) => todo.id !== id);
-  saveAndRender();
+  await saveAndRender();
 }
 
 function resetTaskForm() {
@@ -414,7 +604,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function seedData() {
+async function seedData() {
   const now = new Date();
   const today = toDatetimeLocalValue(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0));
   const nextWeek = new Date(now);
@@ -466,7 +656,7 @@ function seedData() {
     ],
   };
   resetTaskForm();
-  saveAndRender();
+  await saveAndRender();
 }
 
-render();
+initializeFirebase();

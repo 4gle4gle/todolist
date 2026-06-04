@@ -13,9 +13,22 @@
           <span class="brand-mark">T</span>
           <div>
             <h1>Todo Dashboard</h1>
-            <p>로컬 작업 관리</p>
+            <p>Google 계정 작업 관리</p>
           </div>
         </div>
+
+        <section class="auth-card" aria-label="로그인">
+          <div class="auth-user" id="auth-user">
+            <div class="avatar" id="user-avatar">?</div>
+            <div>
+              <strong id="user-name">로그인이 필요합니다</strong>
+              <span id="user-email">Google 계정으로 동기화</span>
+            </div>
+          </div>
+          <p class="auth-message" id="auth-message">로그인하면 계정별 할 일 목록을 저장하고 불러옵니다.</p>
+          <button class="google-button" id="login-button" type="button">Google로 로그인</button>
+          <button class="ghost-dark-button" id="logout-button" type="button" hidden>로그아웃</button>
+        </section>
 
         <form class="list-form" id="list-form">
           <input id="list-name" type="text" placeholder="새 목록 이름" autocomplete="off" />
@@ -141,6 +154,6 @@
       </article>
     </template>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

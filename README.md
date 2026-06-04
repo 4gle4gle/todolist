@@ -1,65 +1,84 @@
 # todolist
 
-파이썬 CLI와 브라우저 웹 화면으로 만든 To Do List 프로그램입니다. Google Tasks의 기능 중 외부 서비스 연동, 기기 동기화, 모바일 알림처럼 팀 프로젝트 학습 범위를 벗어나는 기능은 제외하고, 로컬에서 직접 구현할 수 있는 할 일 관리 기능을 중심으로 구성했습니다.
+Google 계정 로그인과 Firebase Firestore 저장을 사용하는 웹 To Do List입니다.
 
 ## 기능
 
+- Google 계정 로그인/로그아웃
+- 사용자 계정별 할 일 목록 저장 및 불러오기
 - 여러 작업 목록 만들기 및 전환
-- 할 일 목록 보기
 - 할 일 추가, 수정, 삭제
-- 설명 추가
-- 마감일 추가
-- 반복 설정
+- 설명, 마감일, 반복 설정
 - 완료/미완료 변경
-- 하위 작업 추가, 삭제
-- 하위 작업 완료/미완료 변경
-- `todos.json` 파일 저장
+- 하위 작업 추가, 삭제, 완료 변경
+- 완료율과 마감 상태 시각화
+
+## Firebase 설정
+
+1. Firebase Console에서 프로젝트를 만듭니다.
+2. Authentication에서 Google 로그인 제공업체를 활성화합니다.
+3. Firestore Database를 생성합니다.
+4. 프로젝트 설정에서 Web App을 등록하고 Firebase config 값을 복사합니다.
+5. [app.js](app.js)의 `firebaseConfig` 값을 실제 프로젝트 값으로 교체합니다.
+
+```js
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID",
+};
+```
+
+## Firestore 보안 규칙
+
+사용자 본인의 데이터만 읽고 쓸 수 있게 다음 규칙을 설정합니다.
+같은 내용이 [firestore.rules](firestore.rules)에 들어 있습니다.
+
+```js
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
 
 ## 실행 방법
 
-CLI 버전:
+브라우저 보안 정책과 Google OAuth 동작을 위해 파일을 직접 여는 것보다 로컬 서버로 실행하는 방식을 권장합니다.
 
 ```bash
-python3 todo.py
+python3 -m http.server 8000
 ```
 
-웹 버전:
-
-```bash
-open index.html
-```
-
-또는 Finder/PyCharm에서 `index.html`을 브라우저로 열면 됩니다.
-
-## 파일 구조
+그 다음 브라우저에서 엽니다.
 
 ```text
-index.html   # 웹 화면 구조
-style.css    # 웹 화면 스타일
-app.js       # 웹 기능과 시각화
-todo.py      # 프로그램 코드
-todos.json   # 실행 후 자동 생성되는 저장 파일
-README.md    # 프로젝트 설명
+http://localhost:8000
 ```
 
-## 저장 데이터
+Firebase Authentication의 Authorized domains에 `localhost`가 포함되어 있어야 합니다.
 
-CLI 버전은 작업 목록, 할 일, 설명, 마감일, 반복 설정, 하위 작업 정보를 `todos.json`에 저장합니다.
+## 저장 구조
 
-웹 버전은 같은 종류의 데이터를 브라우저 `localStorage`에 저장합니다.
+Firestore에는 로그인 사용자별로 다음 문서에 저장합니다.
 
-## 웹 시각화
+```text
+users/{uid}/todoData/main
+```
 
-- 완료율 링
-- 전체, 진행중, 기한 지남 작업 수
-- 오늘, 예정, 마감 없음, 기한 지남 분포 차트
-- 작업 목록별 완료율 막대
+문서 데이터는 앱의 `state` 구조를 유지합니다.
 
-## 제외한 기능
-
-- Gmail 연동
-- Google Calendar 연동
-- Google Chat 연동
-- 이메일을 작업으로 만들기
-- 기기 간 자동 동기화
-- 모바일 앱 알림
+```json
+{
+  "currentListName": "기본",
+  "lists": [],
+  "updatedAt": "serverTimestamp"
+}
+```
