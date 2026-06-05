@@ -3,6 +3,13 @@
 Google 계정 로그인과 Firebase Firestore 저장을 지원하는 웹 To Do List입니다.
 로그인하지 않은 상태에서는 브라우저 로컬 캐시에 저장하고, 로그인하면 계정별 데이터로 저장합니다.
 
+## 팀원 역할
+
+- 김수현(20251530) : index.html
+- 고근호(20232028) : style.css
+- 박경학(20221476) : app.js
+- 김주원(20251416) : README.md
+
 ## 기능
 
 - Google 계정 로그인/로그아웃
@@ -70,6 +77,8 @@ http://localhost:8000
 ```
 
 Firebase Authentication의 Authorized domains에 `localhost`가 포함되어 있어야 합니다.
+
+로그인 없이 로컬 캐시만 사용할 때는 Finder/PyCharm에서 `index.html`을 브라우저로 직접 열어도 됩니다.
 
 ## 파일 구조
 
