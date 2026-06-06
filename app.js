@@ -31,9 +31,43 @@ const repeatLabels = {
   monthly: "매월",
 };
 
+const progressCharacters = {
+  proud: {
+    src: "character-proud.png",
+    alt: "뿌듯한 캐릭터",
+    label: "뿌듯해요",
+  },
+  tired: {
+    src: "character-tired.png",
+    alt: "지친 캐릭터",
+    label: "아직 괜찮아요",
+  },
+  sad: {
+    src: "character-sad.png",
+    alt: "슬픈 캐릭터",
+    label: "조금 늦었어요",
+  },
+  warning: {
+    src: "character-warning.png",
+    alt: "경고하는 캐릭터",
+    label: "서둘러야 해요",
+  },
+  panic: {
+    src: "character-panic.png",
+    alt: "당황한 캐릭터",
+    label: "많이 밀렸어요",
+  },
+  angry: {
+    src: "character-angry.png",
+    alt: "화난 캐릭터",
+    label: "너무 오래 방치됐어요",
+  },
+};
+
 const DEFAULT_LIST_ICON = "📋";
 const LIST_ICONS = [DEFAULT_LIST_ICON, "📌", "💼", "📚", "🛒", "🏠", "💡", "🎯", "❤️", "⭐"];
 const LOCAL_STORAGE_KEY = "todo-dashboard-local-cache";
+const CHARACTER_REFRESH_INTERVAL_MS = 60 * 1000;
 
 const defaultData = {
   currentListName: "기본",
@@ -80,6 +114,10 @@ const elements = {
   boardEyebrow: document.querySelector("#board-eyebrow"),
   boardTitle: document.querySelector("#board-title"),
   boardSummary: document.querySelector("#board-summary"),
+  characterStatus: document.querySelector("#character-status"),
+  characterMood: document.querySelector("#character-mood"),
+  characterCopy: document.querySelector("#character-copy"),
+  progressCharacter: document.querySelector("#progress-character"),
   columns: document.querySelector("#columns"),
   undoToast: document.querySelector("#undo-toast"),
   undoMessage: document.querySelector("#undo-message"),
@@ -185,6 +223,12 @@ elements.listForm.addEventListener("submit", async (event) => {
   elements.listName.value = "";
   await saveAndRender();
 });
+
+setInterval(() => {
+  if (!isBoardLoading && activeView === "all") {
+    renderProgressCharacterStatus(allTodos());
+  }
+}, CHARACTER_REFRESH_INTERVAL_MS);
 
 function initializeFirebase() {
   if (!isFirebaseConfigured()) {
@@ -572,6 +616,7 @@ function renderBoard() {
     elements.boardEyebrow.textContent = "데이터 확인 중";
     elements.boardTitle.textContent = "작업 보드";
     elements.boardSummary.textContent = "";
+    elements.characterStatus.hidden = true;
     elements.columns.innerHTML = '<div class="column loading-column"><div class="empty-state loading-state">로딩 중이에요..</div></div>';
     return;
   }
@@ -587,6 +632,7 @@ function renderBoard() {
   elements.boardEyebrow.textContent = "모든 할 일";
   elements.boardTitle.textContent = "작업 보드";
   elements.boardSummary.textContent = `전체 ${total}개, 완료 ${completedTodosCount()}개`;
+  renderProgressCharacterStatus(allTodos());
 
   elements.columns.replaceChildren();
   if (columns.length === 0) {
@@ -663,6 +709,7 @@ function renderStarredBoard() {
   elements.boardEyebrow.textContent = "중요 표시됨";
   elements.boardTitle.textContent = "별표 표시된 할 일";
   elements.boardSummary.textContent = `중요 작업 ${starredCount}개`;
+  elements.characterStatus.hidden = true;
   elements.columns.replaceChildren();
 
   const panel = document.createElement("section");
@@ -922,8 +969,90 @@ function activeTodos(list) {
   return list.todos.filter((todo) => !todo.completed);
 }
 
+function allTodos() {
+  return state.lists.flatMap((list) => list.todos);
+}
+
 function completedTodosCount() {
   return state.lists.reduce((sum, list) => sum + list.todos.filter((todo) => todo.completed).length, 0);
+}
+
+function renderProgressCharacterStatus(todos) {
+  const status = getProgressCharacterStatus(todos);
+  const character = progressCharacters[status.mood];
+  elements.characterStatus.hidden = false;
+  elements.characterStatus.dataset.mood = status.mood;
+  elements.characterMood.textContent = character.label;
+  elements.characterCopy.textContent = status.copy;
+  elements.progressCharacter.src = character.src;
+  elements.progressCharacter.alt = character.alt;
+}
+
+function getProgressCharacterStatus(todos, now = new Date()) {
+  const total = todos.length;
+  const active = todos.filter((todo) => !todo.completed);
+
+  if (total === 0) {
+    return {
+      mood: "tired",
+      copy: "아직 할 일이 없어요. 새 작업을 만들면 표정이 바뀝니다.",
+    };
+  }
+
+  if (active.length === 0) {
+    return {
+      mood: "proud",
+      copy: "모든 할 일을 완료했어요.",
+    };
+  }
+
+  const overdueTodos = active.filter(isOverdue);
+  if (overdueTodos.length === 0) {
+    return {
+      mood: "tired",
+      copy: `진행 중 ${active.length}개가 마감 전입니다.`,
+    };
+  }
+
+  const longestOverdueHours = Math.max(
+    ...overdueTodos.map((todo) => hoursSinceDue(todo.dueAt, now)),
+  );
+  const mood = getOverdueMood(longestOverdueHours);
+
+  return {
+    mood,
+    copy: `기한 지난 할 일 ${overdueTodos.length}개, 최대 ${formatOverdueDuration(longestOverdueHours)} 지났어요.`,
+  };
+}
+
+function getOverdueMood(hours) {
+  if (hours >= 72) {
+    return "angry";
+  }
+  if (hours >= 24) {
+    return "panic";
+  }
+  if (hours >= 6) {
+    return "warning";
+  }
+  if (hours >= 1) {
+    return "sad";
+  }
+  return "tired";
+}
+
+function hoursSinceDue(value, now = new Date()) {
+  return Math.max(0, (now - new Date(value)) / (1000 * 60 * 60));
+}
+
+function formatOverdueDuration(hours) {
+  if (hours >= 24) {
+    return `${Math.floor(hours / 24)}일`;
+  }
+  if (hours >= 1) {
+    return `${Math.floor(hours)}시간`;
+  }
+  return `${Math.max(1, Math.floor(hours * 60))}분`;
 }
 
 function findList(listName) {

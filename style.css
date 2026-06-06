@@ -60,6 +60,8 @@ select:disabled {
 }
 
 .sidebar {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -541,6 +543,76 @@ select:disabled {
   font-size: 13px;
   overflow-wrap: anywhere;
   text-align: right;
+}
+
+.board-status {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  min-width: 280px;
+  max-width: 420px;
+}
+
+.character-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: 16px;
+  padding: 10px 10px 10px 14px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 70%);
+  box-shadow: 0 10px 26px rgba(124, 72, 32, 0.1);
+}
+
+.character-status[hidden] {
+  display: none;
+}
+
+.character-status-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: right;
+}
+
+.character-status-copy strong {
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.character-status-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.character-status[data-mood="sad"],
+.character-status[data-mood="warning"] {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 72%);
+}
+
+.character-status[data-mood="panic"],
+.character-status[data-mood="angry"] {
+  border-color: rgba(217, 48, 37, 0.22);
+  background: linear-gradient(135deg, #fff1f0 0%, #ffffff 72%);
+}
+
+.character-status[data-mood="panic"] .character-status-copy strong,
+.character-status[data-mood="angry"] .character-status-copy strong {
+  color: var(--danger);
+}
+
+.progress-character {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  object-fit: cover;
+  object-position: center;
 }
 
 .columns {
@@ -1052,6 +1124,11 @@ select:disabled {
   text-align: left;
 }
 
+.task-menu label {
+  position: relative;
+  overflow: hidden;
+}
+
 .task-menu button:hover,
 .task-menu label:hover {
   background: var(--accent-soft);
@@ -1136,7 +1213,8 @@ select:disabled {
 }
 
 .undo-toast[hidden] {
-  display: none;
+  display: none !important;
+  pointer-events: none;
 }
 
 .undo-toast button {
@@ -1163,7 +1241,8 @@ select:disabled {
 }
 
 .task-modal-backdrop[hidden] {
-  display: none;
+  display: none !important;
+  pointer-events: none;
 }
 
 .task-modal {
@@ -1340,6 +1419,17 @@ select:disabled {
   }
 
   #board-summary {
+    text-align: left;
+  }
+
+  .board-status {
+    justify-items: stretch;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .character-status-copy {
     text-align: left;
   }
 

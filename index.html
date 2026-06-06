@@ -69,7 +69,16 @@
               <p id="board-eyebrow">모든 할 일</p>
               <h2 id="board-title">작업 보드</h2>
             </div>
-            <p id="board-summary">로그인 후 할 일 목록을 불러옵니다.</p>
+            <div class="board-status">
+              <p id="board-summary">로그인 후 할 일 목록을 불러옵니다.</p>
+              <div class="character-status" id="character-status" aria-live="polite">
+                <div class="character-status-copy">
+                  <strong id="character-mood">대기 중</strong>
+                  <span id="character-copy">할 일 상태를 확인합니다.</span>
+                </div>
+                <img id="progress-character" class="progress-character" src="character-proud.png" alt="뿌듯한 캐릭터" />
+              </div>
+            </div>
           </div>
 
           <section class="columns" id="columns" aria-label="할 일 보드"></section>
