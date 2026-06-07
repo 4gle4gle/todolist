@@ -68,6 +68,7 @@ const DEFAULT_LIST_ICON = "📋";
 const LIST_ICONS = [DEFAULT_LIST_ICON, "📌", "💼", "📚", "🛒", "🏠", "💡", "🎯", "❤️", "⭐"];
 const LOCAL_STORAGE_KEY = "todo-dashboard-local-cache";
 const CHARACTER_REFRESH_INTERVAL_MS = 60 * 1000;
+const CHARACTER_OVERDUE_GRACE_HOURS = 1;
 
 const defaultData = {
   currentListName: "기본",
@@ -421,6 +422,7 @@ function normalizeState(data) {
           title: String(todo.title || ""),
           description: String(todo.description || ""),
           dueAt: String(todo.dueAt || ""),
+          createdAt: String(todo.createdAt || ""),
           repeat: repeatLabels[todo.repeat] ? todo.repeat : "none",
           completed: Boolean(todo.completed),
           starred: Boolean(todo.starred),
@@ -862,6 +864,7 @@ function createQuickAddForm(list) {
       title,
       description: "",
       dueAt: dueDate ? `${dueDate}T${timeInput.value || "09:00"}` : "",
+      createdAt: toDatetimeLocalValue(new Date()),
       repeat,
       completed: false,
       starred: false,
@@ -1006,22 +1009,25 @@ function getProgressCharacterStatus(todos, now = new Date()) {
     };
   }
 
-  const overdueTodos = active.filter(isOverdue);
-  if (overdueTodos.length === 0) {
+  const characterOverdueTodos = active.filter((todo) => isCharacterOverdue(todo, now));
+  if (characterOverdueTodos.length === 0) {
+    const createdTodayCount = active.filter((todo) => isCreatedToday(todo, now)).length;
     return {
       mood: "tired",
-      copy: `진행 중 ${active.length}개가 마감 전입니다.`,
+      copy: createdTodayCount > 0
+        ? `오늘 추가한 할 일 ${createdTodayCount}개가 있어요.`
+        : `진행 중 ${active.length}개가 아직 마감 전이거나 유예 시간 안입니다.`,
     };
   }
 
   const longestOverdueHours = Math.max(
-    ...overdueTodos.map((todo) => hoursSinceDue(todo.dueAt, now)),
+    ...characterOverdueTodos.map((todo) => hoursSinceDue(todo.dueAt, now)),
   );
   const mood = getOverdueMood(longestOverdueHours);
 
   return {
     mood,
-    copy: `기한 지난 할 일 ${overdueTodos.length}개, 최대 ${formatOverdueDuration(longestOverdueHours)} 지났어요.`,
+    copy: `기한 지난 할 일 ${characterOverdueTodos.length}개, 최대 ${formatOverdueDuration(longestOverdueHours)} 지났어요.`,
   };
 }
 
@@ -1261,6 +1267,7 @@ async function saveTaskModal(event) {
     targetList.todos.push({
       id: nextTodoId(targetList),
       ...payload,
+      createdAt: toDatetimeLocalValue(new Date()),
       completed: false,
       starred: elements.taskModal.dataset.starred === "true",
       subtasks: [],
@@ -1360,6 +1367,32 @@ async function moveTask(fromListName, toListName, todoId) {
 
 function isOverdue(todo) {
   return Boolean(todo.dueAt) && !todo.completed && new Date(todo.dueAt) < new Date();
+}
+
+function isCharacterOverdue(todo, now = new Date()) {
+  return Boolean(todo.dueAt)
+    && !todo.completed
+    && !isCreatedToday(todo, now)
+    && hoursSinceDue(todo.dueAt, now) >= CHARACTER_OVERDUE_GRACE_HOURS;
+}
+
+function isCreatedToday(todo, now = new Date()) {
+  if (!todo.createdAt) {
+    return false;
+  }
+
+  const createdAt = new Date(todo.createdAt);
+  return isSameCalendarDate(createdAt, now);
+}
+
+function isSameCalendarDate(left, right) {
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) {
+    return false;
+  }
+
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
 }
 
 function nextDueDate(value, repeat) {
