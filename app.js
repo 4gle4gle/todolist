@@ -1419,15 +1419,20 @@ function createTaskMenu(list, todo) {
   const menu = document.createElement("div");
   menu.className = "task-menu";
   menu.innerHTML = `
-    <label>
-      마감일 설정
-      <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
-    </label>
-    <button type="button" data-action="subtask">하위 할 일 추가</button>
-    <button type="button" data-action="ai-subtasks">AI 하위 작업 추천</button>
-    <button type="button" data-action="edit">내용 수정</button>
-    <button type="button" data-action="delete">삭제</button>
-    <div class="menu-label">이동할 목록...</div>
+    <div class="menu-section">
+      <label class="list-menu-action task-menu-date">
+        마감일 설정
+        <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
+      </label>
+      <button class="list-menu-action" type="button" data-action="subtask">하위 할 일 추가</button>
+      <button class="list-menu-action" type="button" data-action="ai-subtasks">AI 하위 작업 추천</button>
+      <button class="list-menu-action" type="button" data-action="edit">내용 수정</button>
+      <button class="list-menu-action danger-action" type="button" data-action="delete">삭제</button>
+    </div>
+    <div class="menu-separator"></div>
+    <div class="menu-section task-menu-targets">
+      <div class="menu-label">이동할 목록...</div>
+    </div>
   `;
 
   menu.querySelector("input").addEventListener("change", async (event) => {
@@ -1445,9 +1450,10 @@ function createTaskMenu(list, todo) {
     .forEach((target) => {
       const button = document.createElement("button");
       button.type = "button";
+      button.className = "list-menu-action";
       button.textContent = target.name;
       button.addEventListener("click", () => moveTask(list.name, target.name, todo.id));
-      menu.append(button);
+      menu.querySelector(".task-menu-targets").append(button);
     });
 
   return menu;

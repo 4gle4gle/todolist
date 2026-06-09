@@ -317,18 +317,22 @@ select:disabled {
   color: var(--accent-strong);
 }
 
-.list-menu {
+.list-menu,
+.task-menu {
   position: absolute;
-  top: 32px;
   right: 0;
-  z-index: 25;
-  width: 310px;
   border: 1px solid var(--glass-line);
   border-radius: 10px;
   padding: 10px 0;
+  box-shadow: var(--glass-shadow);
+}
+
+.list-menu {
+  top: 32px;
+  z-index: 25;
+  width: 310px;
   background: var(--glass-surface-strong);
   backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
 }
 
 .menu-section {
@@ -359,6 +363,11 @@ select:disabled {
 .list-menu-action.active {
   background: rgba(255, 241, 232, 0.75);
   color: var(--accent-strong);
+}
+
+.list-menu-action.danger-action:hover {
+  background: #fce8e6;
+  color: var(--danger);
 }
 
 .list-menu-action:disabled {
@@ -1734,41 +1743,17 @@ select:disabled {
 }
 
 .task-menu {
-  position: absolute;
   top: 30px;
-  right: 0;
   z-index: 60;
-  width: 210px;
+  width: 260px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 6px;
   background: #fffdfb;
   box-shadow: var(--shadow-strong);
 }
 
-.task-menu button,
-.task-menu label {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-height: 34px;
-  border: 0;
-  border-radius: 6px;
-  padding: 0 9px;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  text-align: left;
-}
-
-.task-menu label {
+.task-menu-date {
   position: relative;
   overflow: hidden;
-}
-
-.task-menu button:hover,
-.task-menu label:hover {
-  background: var(--accent-soft);
 }
 
 .task-menu input[type="date"] {
