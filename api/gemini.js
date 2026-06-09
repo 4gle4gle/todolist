@@ -10,6 +10,10 @@ function fallbackMessage(todoTitle) {
   return `"${todoTitle}" 작업을 시작했어요. 작은 시작이 큰 변화를 만듭니다.`;
 }
 
+function fallbackCompletion(todoTitle) {
+  return `"${todoTitle}" 완료. 좋은 흐름을 만들었어요.`;
+}
+
 function fallbackCoach(todos) {
   const activeCount = todos.filter((todo) => !todo.completed).length;
   const dueCount = todos.filter((todo) => todo.dueAt && !todo.completed).length;
@@ -22,10 +26,6 @@ function fallbackCoach(todos) {
   return `진행 중인 일 ${activeCount}개 중 가장 쉬운 것 하나부터 끝내보세요.`;
 }
 
-function fallbackSubtasks(todoTitle) {
-  return [`${todoTitle} 준비하기`, `${todoTitle} 진행하기`, `${todoTitle} 마무리하기`];
-}
-
 function compactTodos(todos) {
   return todos.slice(0, 20).map((todo) => ({
     title: String(todo.title || "").slice(0, 80),
@@ -34,15 +34,6 @@ function compactTodos(todos) {
     starred: Boolean(todo.starred),
     subtaskCount: Array.isArray(todo.subtasks) ? todo.subtasks.length : 0,
   }));
-}
-
-function parseSubtasks(text, todoTitle) {
-  const items = text
-    .split(/\r?\n|,/)
-    .map((item) => item.replace(/^[\s\d.)\-•]+/, "").trim())
-    .filter(Boolean)
-    .slice(0, 5);
-  return items.length > 0 ? items : fallbackSubtasks(todoTitle);
 }
 
 async function requestGemini(apiKey, model, prompt) {
@@ -77,7 +68,7 @@ module.exports = async function handler(request, response) {
   const todoTitle = String(request.body?.todoTitle || "").trim().slice(0, 120);
   const todos = Array.isArray(request.body?.todos) ? compactTodos(request.body.todos) : [];
 
-  if ((type === "motivation" || type === "subtasks") && !todoTitle) {
+  if ((type === "motivation" || type === "completion") && !todoTitle) {
     sendJson(response, 400, { error: "TODO_TITLE_REQUIRED" });
     return;
   }
@@ -87,8 +78,8 @@ module.exports = async function handler(request, response) {
       sendJson(response, 200, { text: fallbackCoach(todos), fallback: true });
       return;
     }
-    if (type === "subtasks") {
-      sendJson(response, 200, { subtasks: fallbackSubtasks(todoTitle), fallback: true });
+    if (type === "completion") {
+      sendJson(response, 200, { text: fallbackCompletion(todoTitle), fallback: true });
       return;
     }
     sendJson(response, 200, { text: fallbackMessage(todoTitle), fallback: true });
@@ -103,11 +94,10 @@ module.exports = async function handler(request, response) {
       return;
     }
 
-    if (type === "subtasks") {
-      const prompt = `할 일 "${todoTitle}"을 실행 가능한 하위 작업 3~5개로 나눠줘. 한국어로 작성하고, 각 줄에 하나씩 제목만 출력해줘.`;
+    if (type === "completion") {
+      const prompt = `사용자가 할 일 "${todoTitle}"을 완료했어. 성취감을 주는 짧은 한국어 피드백을 한 문장으로 작성해줘. 40자 안팎, 과장하지 말고 다음 행동을 살짝 격려해줘.`;
       const text = await requestGemini(apiKey, model, prompt);
-      const subtasks = parseSubtasks(text, todoTitle);
-      sendJson(response, 200, { subtasks, fallback: !text });
+      sendJson(response, 200, { text: text || fallbackCompletion(todoTitle), fallback: !text });
       return;
     }
 
@@ -123,8 +113,8 @@ module.exports = async function handler(request, response) {
       sendJson(response, 200, { text: fallbackCoach(todos), fallback: true });
       return;
     }
-    if (type === "subtasks") {
-      sendJson(response, 200, { subtasks: fallbackSubtasks(todoTitle), fallback: true });
+    if (type === "completion") {
+      sendJson(response, 200, { text: fallbackCompletion(todoTitle), fallback: true });
       return;
     }
     sendJson(response, 200, { text: fallbackMessage(todoTitle), fallback: true });

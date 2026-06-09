@@ -1484,7 +1484,6 @@ function createTaskMenu(list, todo) {
         <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
       </label>
       <button class="list-menu-action" type="button" data-action="subtask">하위 할 일 추가</button>
-      <button class="list-menu-action" type="button" data-action="ai-subtasks">AI 하위 작업 추천</button>
       <button class="list-menu-action" type="button" data-action="edit">내용 수정</button>
       <button class="list-menu-action danger-action" type="button" data-action="delete">삭제</button>
     </div>
@@ -1500,7 +1499,6 @@ function createTaskMenu(list, todo) {
     await saveAndRender();
   });
   menu.querySelector('[data-action="subtask"]').addEventListener("click", () => addSubtask(list.name, todo.id));
-  menu.querySelector('[data-action="ai-subtasks"]').addEventListener("click", () => suggestSubtasks(list.name, todo.id));
   menu.querySelector('[data-action="edit"]').addEventListener("click", () => editTask(list.name, todo.id));
   menu.querySelector('[data-action="delete"]').addEventListener("click", () => deleteTask(list.name, todo.id));
 
@@ -2257,72 +2255,19 @@ async function addSubtask(listName, todoId) {
   await saveAndRender();
 }
 
-async function suggestSubtasks(listName, todoId) {
-  const todo = findTodo(listName, todoId);
-  if (!todo) {
-    return;
-  }
-
-  activeMenu = null;
-  if (elements.aiMotivationText) {
-    elements.aiMotivationText.textContent = `"${todo.title}" 하위 작업을 추천하는 중입니다...`;
-  }
-
-  try {
-    const response = await fetch(GEMINI_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "subtasks", todoTitle: todo.title }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini endpoint failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const existingTitles = new Set(todo.subtasks.map((subtask) => subtask.title));
-    const suggestions = Array.isArray(data.subtasks)
-      ? data.subtasks.map((title) => String(title).trim()).filter(Boolean)
-      : [];
-    const nextSuggestions = suggestions
-      .filter((title) => !existingTitles.has(title))
-      .slice(0, 5);
-
-    if (nextSuggestions.length === 0) {
-      if (elements.aiMotivationText) {
-        elements.aiMotivationText.textContent = "이미 추가할 만한 하위 작업이 충분합니다.";
-      }
-      await saveAndRender();
-      return;
-    }
-
-    nextSuggestions.forEach((title) => {
-      todo.subtasks.push({ id: nextSubtaskId(todo), title, completed: false });
-    });
-    if (elements.aiMotivationText) {
-      elements.aiMotivationText.textContent = `하위 작업 ${nextSuggestions.length}개를 추가했습니다.`;
-    }
-    await saveAndRender();
-  } catch (error) {
-    console.error(error);
-    if (elements.aiMotivationText) {
-      elements.aiMotivationText.textContent = "하위 작업 추천을 불러오지 못했습니다.";
-    }
-    renderBoard();
-  }
-}
-
 async function toggleTodo(listName, todoId) {
   const todo = findTodo(listName, todoId);
   if (!todo) {
     return;
   }
 
+  let completedNow = false;
   if (!todo.completed && todo.repeat !== "none" && todo.dueAt) {
     todo.dueAt = nextDueDate(todo.dueAt, todo.repeat);
   } else {
     todo.completed = !todo.completed;
     todo.completedAt = todo.completed ? toDatetimeLocalValue(new Date()) : "";
+    completedNow = todo.completed;
   }
 
   const key = todoKey(listName, todoId);
@@ -2340,6 +2285,9 @@ async function toggleTodo(listName, todoId) {
     completionTimers.delete(key);
   }
   await saveAndRender();
+  if (completedNow) {
+    await generateCompletionMotivation(todo.title);
+  }
 }
 
 async function toggleStar(listName, todoId) {
@@ -2491,6 +2439,34 @@ async function generateMotivation(todoTitle) {
     console.error(error);
     elements.aiMotivationText.textContent =
       `"${todoTitle}" 작업을 시작했어요. 작은 시작이 큰 변화를 만듭니다.`;
+  }
+}
+
+async function generateCompletionMotivation(todoTitle) {
+  if (!elements.aiMotivationText) {
+    return;
+  }
+
+  elements.aiMotivationText.textContent = "완료한 일을 바탕으로 응원 문구를 만드는 중입니다...";
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "completion", todoTitle }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini endpoint failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.text?.trim();
+    elements.aiMotivationText.textContent =
+      text || `"${todoTitle}" 완료. 좋은 흐름을 만들었어요.`;
+  } catch (error) {
+    console.error(error);
+    elements.aiMotivationText.textContent = `"${todoTitle}" 완료. 좋은 흐름을 만들었어요.`;
   }
 }
 
