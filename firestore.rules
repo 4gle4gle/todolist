@@ -2,8 +2,30 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isDeveloper() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/developers/$(request.auth.uid));
+    }
+
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /developers/{developerId} {
+      allow read: if request.auth != null && request.auth.uid == developerId;
+      allow create, update, delete: if request.auth != null && request.auth.uid == developerId;
+    }
+
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null
+        && request.resource.data.title is string
+        && request.resource.data.content is string
+        && request.resource.data.status == "open";
+      allow read: if isDeveloper();
+      allow update: if isDeveloper()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "reviewedAt", "reviewedBy"])
+        && request.resource.data.status == "reviewed";
+      allow delete: if false;
     }
   }
 }

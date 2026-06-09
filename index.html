@@ -29,6 +29,14 @@
               <span>★</span>
               중요 표시됨
             </button>
+            <button id="about-view-button" type="button">
+              <span>ⓘ</span>
+              소개
+            </button>
+            <button id="developer-view-button" type="button" hidden>
+              <span>⚙</span>
+              개발자
+            </button>
           </nav>
 
           <section class="list-section">
@@ -87,6 +95,22 @@
       <div class="undo-toast" id="undo-toast" role="status" aria-live="polite" hidden>
         <span id="undo-message">목록을 삭제했습니다.</span>
         <button id="undo-button" type="button">실행취소</button>
+      </div>
+      <div class="feedback-modal-backdrop" id="feedback-modal" hidden>
+        <form class="feedback-modal" id="feedback-modal-form" aria-labelledby="feedback-modal-title">
+          <button class="feedback-modal-close" id="feedback-modal-close" type="button" aria-label="닫기">×</button>
+          <h2 id="feedback-modal-title">문제 제보하기</h2>
+          <p>Google 로그인 후 사용 중 불편했던 점이나 오류 상황을 알려주세요.</p>
+          <label>
+            제목
+            <input id="feedback-title" type="text" placeholder="예: 로그인 후 목록이 보이지 않음" autocomplete="off" />
+          </label>
+          <label>
+            상세 내용
+            <textarea id="feedback-content" placeholder="어떤 화면에서 어떤 문제가 있었는지 적어주세요."></textarea>
+          </label>
+          <button class="feedback-submit-button" id="feedback-submit-button" type="submit" disabled>제보 제출</button>
+        </form>
       </div>
       <div class="task-modal-backdrop" id="task-modal" hidden>
         <form class="task-modal" id="task-modal-form" aria-labelledby="task-modal-title">
