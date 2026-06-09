@@ -78,6 +78,7 @@ const LOCAL_DEVELOPER_KEY = "todo-dashboard-developer";
 const CHARACTER_REFRESH_INTERVAL_MS = 60 * 1000;
 const CHARACTER_OVERDUE_GRACE_HOURS = 1;
 const DEVELOPER_PASSWORD = "6767";
+const GEMINI_ENDPOINT = "/api/gemini";
 
 const defaultData = {
   currentListName: "기본",
@@ -96,6 +97,8 @@ let isBoardLoading = false;
 const recentlyCompleted = new Set();
 const completionTimers = new Map();
 const expandedCompletedLists = new Set();
+let dailyCoachTimer = null;
+let isGeneratingDailyCoach = false;
 let deletedSnapshot = null;
 let undoTimer = null;
 let editingTask = null;
@@ -129,6 +132,7 @@ const elements = {
   boardEyebrow: document.querySelector("#board-eyebrow"),
   boardTitle: document.querySelector("#board-title"),
   boardSummary: document.querySelector("#board-summary"),
+  aiMotivationText: document.querySelector("#ai-motivation-text"),
   characterStatus: document.querySelector("#character-status"),
   characterMood: document.querySelector("#character-mood"),
   characterCopy: document.querySelector("#character-copy"),
@@ -288,6 +292,7 @@ function initializeFirebase() {
     renderSignedOut("Firebase 설정 전입니다. 현재 데이터는 이 브라우저에만 저장됩니다.");
     setAppEnabled(true);
     render();
+    scheduleDailyCoach(900);
     return;
   }
 
@@ -309,6 +314,7 @@ function initializeFirebase() {
       isBoardLoading = false;
       renderSignedOut();
       render();
+      scheduleDailyCoach(900);
       return;
     }
 
@@ -325,6 +331,7 @@ function initializeFirebase() {
     setAuthMessage("Google 계정에 저장됩니다.");
     setAppEnabled(true);
     render();
+    scheduleDailyCoach(900);
   });
 }
 
@@ -918,6 +925,7 @@ function renderBoard() {
     });
     if (activeListMenu === list.name) {
       menuWrap.append(createListMenu(list));
+      positionFloatingMenu(menuWrap.querySelector(".list-menu"));
     }
     if (quickAddListName === list.name) {
       column.querySelector(".quick-add-slot").append(createQuickAddForm(list));
@@ -1258,13 +1266,13 @@ function renderStarredBoard() {
 function createTaskCard(list, todo) {
   const card = document.createElement("div");
   const menuId = `${list.name}:${todo.id}`;
-  card.className = `task-card ${todo.completed ? "completed" : ""}`;
+  card.className = `task-card ${todo.completed ? "completed" : ""} ${activeMenu === menuId ? "menu-open" : ""}`;
   card.innerHTML = `
     <div class="task-main">
       <div class="task-left">
         <button class="complete-button" type="button" aria-label="완료 변경"></button>
         <div class="task-text">
-          <div class="task-title">${escapeHtml(todo.title)}</div>
+          <button class="task-title" type="button" title="이름 수정">${escapeHtml(todo.title)}</button>
           ${todo.description ? `<div class="task-description">${escapeHtml(todo.description)}</div>` : ""}
           <div class="task-meta"></div>
         </div>
@@ -1280,6 +1288,7 @@ function createTaskCard(list, todo) {
   `;
 
   card.querySelector(".complete-button").addEventListener("click", () => toggleTodo(list.name, todo.id));
+  card.querySelector(".task-title").addEventListener("click", () => editTaskTitle(list.name, todo.id, card));
   card.querySelector('[data-action="star"]').addEventListener("click", () => toggleStar(list.name, todo.id));
   card.querySelector('[data-action="menu"]').addEventListener("click", (event) => {
     event.stopPropagation();
@@ -1292,10 +1301,67 @@ function createTaskCard(list, todo) {
   renderSubtasks(card.querySelector(".subtasks"), list.name, todo);
 
   if (activeMenu === menuId) {
-    card.querySelector(".menu-wrap").append(createTaskMenu(list, todo));
+    const menuWrap = card.querySelector(".menu-wrap");
+    menuWrap.append(createTaskMenu(list, todo));
+    positionFloatingMenu(menuWrap.querySelector(".task-menu"));
   }
 
   return card;
+}
+
+function positionFloatingMenu(menu) {
+  if (!menu) {
+    return;
+  }
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    const padding = 12;
+    menu.classList.toggle("align-left", rect.left < padding);
+  });
+}
+
+function editTaskTitle(listName, todoId, card) {
+  const todo = findTodo(listName, todoId);
+  const titleButton = card.querySelector(".task-title");
+  if (!todo || !titleButton || card.querySelector(".task-title-input")) {
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.className = "task-title-input";
+  input.type = "text";
+  input.value = todo.title;
+  input.setAttribute("aria-label", "할 일 이름 수정");
+  titleButton.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let isSaving = false;
+  const finish = async (shouldSave) => {
+    if (isSaving) {
+      return;
+    }
+    isSaving = true;
+    const nextTitle = input.value.trim();
+    if (shouldSave && nextTitle && nextTitle !== todo.title) {
+      todo.title = nextTitle;
+      activeMenu = null;
+      await saveAndRender();
+      return;
+    }
+    renderBoard();
+  };
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(true));
 }
 
 function createQuickAddForm(list) {
@@ -1388,6 +1454,7 @@ function createQuickAddForm(list) {
     state.currentListName = list.name;
     activeView = "all";
     await saveAndRender();
+    scheduleDailyCoach();
   };
 
   form.addEventListener("submit", async (event) => {
@@ -1418,14 +1485,19 @@ function createTaskMenu(list, todo) {
   const menu = document.createElement("div");
   menu.className = "task-menu";
   menu.innerHTML = `
-    <label>
-      마감일 설정
-      <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
-    </label>
-    <button type="button" data-action="subtask">하위 할 일 추가</button>
-    <button type="button" data-action="edit">내용 수정</button>
-    <button type="button" data-action="delete">삭제</button>
-    <div class="menu-label">이동할 목록...</div>
+    <div class="menu-section">
+      <label class="list-menu-action task-menu-date">
+        마감일 설정
+        <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
+      </label>
+      <button class="list-menu-action" type="button" data-action="subtask">하위 할 일 추가</button>
+      <button class="list-menu-action" type="button" data-action="edit">내용 수정</button>
+      <button class="list-menu-action danger-action" type="button" data-action="delete">삭제</button>
+    </div>
+    <div class="menu-separator"></div>
+    <div class="menu-section task-menu-targets">
+      <div class="menu-label">이동할 목록...</div>
+    </div>
   `;
 
   menu.querySelector("input").addEventListener("change", async (event) => {
@@ -1442,9 +1514,10 @@ function createTaskMenu(list, todo) {
     .forEach((target) => {
       const button = document.createElement("button");
       button.type = "button";
+      button.className = "list-menu-action";
       button.textContent = target.name;
       button.addEventListener("click", () => moveTask(list.name, target.name, todo.id));
-      menu.append(button);
+      menu.querySelector(".task-menu-targets").append(button);
     });
 
   return menu;
@@ -2188,6 +2261,7 @@ async function saveTaskModal(event) {
   activeMenu = null;
   closeTaskModal();
   await saveAndRender();
+  scheduleDailyCoach();
 }
 
 function editTask(listName, todoId) {
@@ -2236,6 +2310,7 @@ async function toggleTodo(listName, todoId) {
     completionTimers.delete(key);
   }
   await saveAndRender();
+  scheduleDailyCoach();
 }
 
 async function toggleStar(listName, todoId) {
@@ -2360,6 +2435,48 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+async function generateDailyCoach() {
+  if (!elements.aiMotivationText || isGeneratingDailyCoach) {
+    return;
+  }
+
+  isGeneratingDailyCoach = true;
+  elements.aiMotivationText.textContent = "할 일 흐름을 보고 가볍게 정리하는 중입니다...";
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "daily-coach",
+        todos: allTodos(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini endpoint failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    elements.aiMotivationText.textContent =
+      data.text?.trim() || "가볍게 하나만 먼저 잡아도 충분해요. 지금 흐름 좋아요.";
+  } catch (error) {
+    console.error(error);
+    elements.aiMotivationText.textContent = "가볍게 하나만 먼저 잡아도 충분해요. 지금 흐름 좋아요.";
+  } finally {
+    isGeneratingDailyCoach = false;
+  }
+}
+
+function scheduleDailyCoach(delay = 650) {
+  if (!elements.aiMotivationText) {
+    return;
+  }
+  clearTimeout(dailyCoachTimer);
+  dailyCoachTimer = setTimeout(() => {
+    generateDailyCoach();
+  }, delay);
+}
 initializeFirebase();
 
 if ("serviceWorker" in navigator) {
