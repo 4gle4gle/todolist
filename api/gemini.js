@@ -6,24 +6,16 @@ function sendJson(response, statusCode, body) {
   response.status(statusCode).json(body);
 }
 
-function fallbackMessage(todoTitle) {
-  return `"${todoTitle}" 작업을 시작했어요. 작은 시작이 큰 변화를 만듭니다.`;
-}
-
-function fallbackCompletion(todoTitle) {
-  return `"${todoTitle}" 완료. 좋은 흐름을 만들었어요.`;
-}
-
 function fallbackCoach(todos) {
   const activeCount = todos.filter((todo) => !todo.completed).length;
   const dueCount = todos.filter((todo) => todo.dueAt && !todo.completed).length;
   if (activeCount === 0) {
-    return "오늘은 정리된 상태예요. 새 목표를 하나만 가볍게 정해보세요.";
+    return "오늘은 꽤 정리된 상태예요. 작은 목표 하나만 더해도 괜찮아요.";
   }
   if (dueCount > 0) {
-    return `마감 있는 일 ${dueCount}개를 먼저 처리하고, 남은 일은 짧게 나눠 진행해보세요.`;
+    return `마감 있는 일 ${dueCount}개부터 가볍게 보면 좋아요. 하나씩 해도 충분합니다.`;
   }
-  return `진행 중인 일 ${activeCount}개 중 가장 쉬운 것 하나부터 끝내보세요.`;
+  return `진행 중인 일 ${activeCount}개 중 쉬운 것 하나만 먼저 잡아봐요. 지금 흐름 괜찮아요.`;
 }
 
 function compactTodos(todos) {
@@ -64,59 +56,33 @@ module.exports = async function handler(request, response) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  const type = String(request.body?.type || "motivation");
-  const todoTitle = String(request.body?.todoTitle || "").trim().slice(0, 120);
+  const type = String(request.body?.type || "daily-coach");
   const todos = Array.isArray(request.body?.todos) ? compactTodos(request.body.todos) : [];
 
-  if ((type === "motivation" || type === "completion") && !todoTitle) {
-    sendJson(response, 400, { error: "TODO_TITLE_REQUIRED" });
+  if (type !== "daily-coach") {
+    sendJson(response, 400, { error: "UNSUPPORTED_TYPE" });
     return;
   }
 
   if (!apiKey) {
-    if (type === "daily-coach") {
-      sendJson(response, 200, { text: fallbackCoach(todos), fallback: true });
-      return;
-    }
-    if (type === "completion") {
-      sendJson(response, 200, { text: fallbackCompletion(todoTitle), fallback: true });
-      return;
-    }
-    sendJson(response, 200, { text: fallbackMessage(todoTitle), fallback: true });
+    sendJson(response, 200, { text: fallbackCoach(todos), fallback: true });
     return;
   }
 
   try {
-    if (type === "daily-coach") {
-      const prompt = `다음 할 일 목록을 보고 오늘의 실행 전략을 한국어 한 문장으로 제안해줘. 55자 안팎, 과장 없이 실용적으로.\n${JSON.stringify(todos)}`;
-      const text = await requestGemini(apiKey, model, prompt);
-      sendJson(response, 200, { text: text || fallbackCoach(todos), fallback: !text });
-      return;
-    }
-
-    if (type === "completion") {
-      const prompt = `사용자가 할 일 "${todoTitle}"을 완료했어. 성취감을 주는 짧은 한국어 피드백을 한 문장으로 작성해줘. 40자 안팎, 과장하지 말고 다음 행동을 살짝 격려해줘.`;
-      const text = await requestGemini(apiKey, model, prompt);
-      sendJson(response, 200, { text: text || fallbackCompletion(todoTitle), fallback: !text });
-      return;
-    }
-
-    const prompt = `할 일 "${todoTitle}"에 맞는 짧은 동기부여 문구를 한국어로 한 문장만 만들어줘. 과장하지 말고 35자 안팎으로 작성해줘.`;
+    const prompt = `다음 할 일 목록을 보고 오늘의 할 일 제안을 한국어로 한 문장만 작성해줘.
+조건:
+- 방어기제처럼 들리는 말투는 피하기
+- 명령하거나 압박하지 않기
+- 가볍고 담백한 말투
+- 실행 제안 1개와 짧은 격려를 자연스럽게 이어 붙이기
+- 65자 안팎
+할 일 목록:
+${JSON.stringify(todos)}`;
     const text = await requestGemini(apiKey, model, prompt);
-    sendJson(response, 200, {
-      text: text || fallbackMessage(todoTitle),
-      fallback: !text,
-    });
+    sendJson(response, 200, { text: text || fallbackCoach(todos), fallback: !text });
   } catch (error) {
     console.error(error);
-    if (type === "daily-coach") {
-      sendJson(response, 200, { text: fallbackCoach(todos), fallback: true });
-      return;
-    }
-    if (type === "completion") {
-      sendJson(response, 200, { text: fallbackCompletion(todoTitle), fallback: true });
-      return;
-    }
-    sendJson(response, 200, { text: fallbackMessage(todoTitle), fallback: true });
+    sendJson(response, 200, { text: fallbackCoach(todos), fallback: true });
   }
 };

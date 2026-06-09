@@ -654,37 +654,9 @@ select:disabled {
   text-align: right;
 }
 
-.ai-motivation-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .ai-motivation strong {
   color: var(--accent-strong);
   font-size: 12px;
-}
-
-.ai-motivation button {
-  min-height: 24px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 9px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.ai-motivation button:hover:not(:disabled) {
-  background: var(--accent);
-  color: white;
-}
-
-.ai-motivation button:disabled {
-  opacity: 0.55;
-  cursor: progress;
 }
 
 .ai-motivation span {

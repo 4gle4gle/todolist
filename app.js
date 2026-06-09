@@ -97,6 +97,8 @@ let isBoardLoading = false;
 const recentlyCompleted = new Set();
 const completionTimers = new Map();
 const expandedCompletedLists = new Set();
+let dailyCoachTimer = null;
+let isGeneratingDailyCoach = false;
 let deletedSnapshot = null;
 let undoTimer = null;
 let editingTask = null;
@@ -131,7 +133,6 @@ const elements = {
   boardTitle: document.querySelector("#board-title"),
   boardSummary: document.querySelector("#board-summary"),
   aiMotivationText: document.querySelector("#ai-motivation-text"),
-  aiCoachButton: document.querySelector("#ai-coach-button"),
   characterStatus: document.querySelector("#character-status"),
   characterMood: document.querySelector("#character-mood"),
   characterCopy: document.querySelector("#character-copy"),
@@ -235,7 +236,6 @@ elements.taskModal.addEventListener("click", (event) => {
 elements.taskModalTitle.addEventListener("input", updateTaskModalSaveState);
 elements.taskModalAllDay.addEventListener("change", updateTaskModalTimeState);
 elements.taskModalForm.addEventListener("submit", saveTaskModal);
-elements.aiCoachButton?.addEventListener("click", () => generateDailyCoach());
 
 elements.allViewButton.addEventListener("click", () => {
   activeView = "all";
@@ -288,6 +288,7 @@ function initializeFirebase() {
     renderSignedOut("Firebase 설정 전입니다. 현재 데이터는 이 브라우저에만 저장됩니다.");
     setAppEnabled(true);
     render();
+    scheduleDailyCoach(900);
     return;
   }
 
@@ -309,6 +310,7 @@ function initializeFirebase() {
       isBoardLoading = false;
       renderSignedOut();
       render();
+      scheduleDailyCoach(900);
       return;
     }
 
@@ -325,6 +327,7 @@ function initializeFirebase() {
     setAuthMessage("Google 계정에 저장됩니다.");
     setAppEnabled(true);
     render();
+    scheduleDailyCoach(900);
   });
 }
 
@@ -1447,7 +1450,7 @@ function createQuickAddForm(list) {
     state.currentListName = list.name;
     activeView = "all";
     await saveAndRender();
-    await generateMotivation(title);
+    scheduleDailyCoach();
   };
 
   form.addEventListener("submit", async (event) => {
@@ -2232,9 +2235,7 @@ async function saveTaskModal(event) {
   activeMenu = null;
   closeTaskModal();
   await saveAndRender();
-  if (!editingTask) {
-    await generateMotivation(title);
-  }
+  scheduleDailyCoach();
 }
 
 function editTask(listName, todoId) {
@@ -2261,13 +2262,11 @@ async function toggleTodo(listName, todoId) {
     return;
   }
 
-  let completedNow = false;
   if (!todo.completed && todo.repeat !== "none" && todo.dueAt) {
     todo.dueAt = nextDueDate(todo.dueAt, todo.repeat);
   } else {
     todo.completed = !todo.completed;
     todo.completedAt = todo.completed ? toDatetimeLocalValue(new Date()) : "";
-    completedNow = todo.completed;
   }
 
   const key = todoKey(listName, todoId);
@@ -2285,9 +2284,7 @@ async function toggleTodo(listName, todoId) {
     completionTimers.delete(key);
   }
   await saveAndRender();
-  if (completedNow) {
-    await generateCompletionMotivation(todo.title);
-  }
+  scheduleDailyCoach();
 }
 
 async function toggleStar(listName, todoId) {
@@ -2412,71 +2409,13 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-async function generateMotivation(todoTitle) {
-  if (!elements.aiMotivationText) {
-    return;
-  }
-
-  elements.aiMotivationText.textContent = "AI가 동기부여 문구를 만드는 중입니다...";
-
-  try {
-    const response = await fetch(GEMINI_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ todoTitle }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini endpoint failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.text?.trim();
-
-    elements.aiMotivationText.textContent =
-      text || `"${todoTitle}" 작업을 시작했어요. 작은 시작이 큰 변화를 만듭니다.`;
-  } catch (error) {
-    console.error(error);
-    elements.aiMotivationText.textContent =
-      `"${todoTitle}" 작업을 시작했어요. 작은 시작이 큰 변화를 만듭니다.`;
-  }
-}
-
-async function generateCompletionMotivation(todoTitle) {
-  if (!elements.aiMotivationText) {
-    return;
-  }
-
-  elements.aiMotivationText.textContent = "완료한 일을 바탕으로 응원 문구를 만드는 중입니다...";
-
-  try {
-    const response = await fetch(GEMINI_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "completion", todoTitle }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini endpoint failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.text?.trim();
-    elements.aiMotivationText.textContent =
-      text || `"${todoTitle}" 완료. 좋은 흐름을 만들었어요.`;
-  } catch (error) {
-    console.error(error);
-    elements.aiMotivationText.textContent = `"${todoTitle}" 완료. 좋은 흐름을 만들었어요.`;
-  }
-}
-
 async function generateDailyCoach() {
-  if (!elements.aiMotivationText) {
+  if (!elements.aiMotivationText || isGeneratingDailyCoach) {
     return;
   }
 
-  elements.aiMotivationText.textContent = "오늘의 실행 전략을 정리하는 중입니다...";
-  elements.aiCoachButton?.setAttribute("disabled", "");
+  isGeneratingDailyCoach = true;
+  elements.aiMotivationText.textContent = "할 일 흐름을 보고 가볍게 정리하는 중입니다...";
 
   try {
     const response = await fetch(GEMINI_ENDPOINT, {
@@ -2494,12 +2433,22 @@ async function generateDailyCoach() {
 
     const data = await response.json();
     elements.aiMotivationText.textContent =
-      data.text?.trim() || "가장 쉬운 일 하나부터 끝내며 흐름을 만들어보세요.";
+      data.text?.trim() || "가볍게 하나만 먼저 잡아도 충분해요. 지금 흐름 좋아요.";
   } catch (error) {
     console.error(error);
-    elements.aiMotivationText.textContent = "가장 쉬운 일 하나부터 끝내며 흐름을 만들어보세요.";
+    elements.aiMotivationText.textContent = "가볍게 하나만 먼저 잡아도 충분해요. 지금 흐름 좋아요.";
   } finally {
-    elements.aiCoachButton?.removeAttribute("disabled");
+    isGeneratingDailyCoach = false;
   }
+}
+
+function scheduleDailyCoach(delay = 650) {
+  if (!elements.aiMotivationText) {
+    return;
+  }
+  clearTimeout(dailyCoachTimer);
+  dailyCoachTimer = setTimeout(() => {
+    generateDailyCoach();
+  }, delay);
 }
 initializeFirebase();
