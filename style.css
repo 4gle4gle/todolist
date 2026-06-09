@@ -1732,14 +1732,13 @@ select:disabled {
   position: absolute;
   top: 30px;
   right: 0;
-  z-index: 20;
-  width: 190px;
-  border: 1px solid var(--glass-line);
+  z-index: 60;
+  width: 210px;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 6px;
-  background: var(--glass-surface-strong);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
+  background: #fffdfb;
+  box-shadow: var(--shadow-strong);
 }
 
 .task-menu button,
