@@ -1386,6 +1386,7 @@ function createQuickAddForm(list) {
     state.currentListName = list.name;
     activeView = "all";
     await saveAndRender();
+    await generateMotivation(title);
   };
 
   form.addEventListener("submit", async (event) => {
