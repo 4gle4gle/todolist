@@ -1534,6 +1534,7 @@ function renderProgressCharacterStatus(todos) {
   const character = progressCharacters[status.mood];
   elements.characterStatus.hidden = false;
   elements.characterStatus.dataset.mood = status.mood;
+  elements.characterStatus.dataset.activeCount = String(status.activeCount);
   elements.characterMood.textContent = character.label;
   elements.characterCopy.textContent = status.copy;
   elements.progressCharacter.src = character.src;
@@ -1547,6 +1548,7 @@ function getProgressCharacterStatus(todos, now = new Date()) {
   if (total === 0) {
     return {
       mood: "proud",
+      activeCount: 0,
       copy: "\uC544\uC9C1 \uD560 \uC77C\uC774 \uC5C6\uC5B4\uC694. \uD560 \uC77C\uC744 \uCD94\uAC00\uD558\uBA74 \uC0C1\uD0DC\uAC00 \uBC14\uB01D\uB2C8\uB2E4.",
     };
   }
@@ -1554,6 +1556,7 @@ function getProgressCharacterStatus(todos, now = new Date()) {
   if (active.length === 0) {
     return {
       mood: "proud",
+      activeCount: 0,
       copy: "\uBAA8\uB4E0 \uD560 \uC77C\uC744 \uC644\uB8CC\uD588\uC5B4\uC694.",
     };
   }
@@ -1570,6 +1573,7 @@ function getProgressCharacterStatus(todos, now = new Date()) {
 
   return {
     mood,
+    activeCount: active.length,
     copy: `\uC9C4\uD589 \uC911\uC778 \uD560 \uC77C ${active.length}\uAC1C\uC785\uB2C8\uB2E4.${todayCopy}${overdueCopy}`,
   };
 }
