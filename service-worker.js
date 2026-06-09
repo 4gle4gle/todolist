@@ -1,4 +1,4 @@
-const CACHE_NAME = "todo-dashboard-v6";
+const CACHE_NAME = "todo-dashboard-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -41,6 +41,29 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+  const isAppShellAsset =
+    event.request.mode === "navigate"
+    || requestUrl.pathname.endsWith("/")
+    || requestUrl.pathname.endsWith("/index.html")
+    || requestUrl.pathname.endsWith("/app.js")
+    || requestUrl.pathname.endsWith("/style.css");
+
+  if (isAppShellAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request).then((cachedResponse) => cachedResponse || caches.match("./index.html"))),
+    );
     return;
   }
 
