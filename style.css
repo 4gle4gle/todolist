@@ -761,7 +761,7 @@ select:disabled {
   display: flex;
   gap: 16px;
   min-width: max-content;
-  padding: 24px;
+  padding: 24px 48px 48px 24px;
 }
 
 .column {
@@ -1650,10 +1650,37 @@ select:disabled {
 }
 
 .task-title {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
   color: var(--text);
   font-size: 14px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.task-title:hover,
+.task-title:focus-visible {
+  color: var(--accent-strong);
+  outline: none;
+}
+
+.task-title-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  outline: none;
 }
 
 .task-card.completed .task-title {
@@ -1749,6 +1776,12 @@ select:disabled {
   border: 1px solid var(--line);
   background: #fffdfb;
   box-shadow: var(--shadow-strong);
+}
+
+.list-menu.align-left,
+.task-menu.align-left {
+  right: auto;
+  left: 0;
 }
 
 .task-menu-date {
@@ -2210,6 +2243,7 @@ select:disabled {
 
   .columns {
     min-width: 0;
+    padding-right: 24px;
     flex-direction: column;
   }
 

@@ -918,6 +918,7 @@ function renderBoard() {
     });
     if (activeListMenu === list.name) {
       menuWrap.append(createListMenu(list));
+      positionFloatingMenu(menuWrap.querySelector(".list-menu"));
     }
     if (quickAddListName === list.name) {
       column.querySelector(".quick-add-slot").append(createQuickAddForm(list));
@@ -1264,7 +1265,7 @@ function createTaskCard(list, todo) {
       <div class="task-left">
         <button class="complete-button" type="button" aria-label="완료 변경"></button>
         <div class="task-text">
-          <div class="task-title">${escapeHtml(todo.title)}</div>
+          <button class="task-title" type="button" title="이름 수정">${escapeHtml(todo.title)}</button>
           ${todo.description ? `<div class="task-description">${escapeHtml(todo.description)}</div>` : ""}
           <div class="task-meta"></div>
         </div>
@@ -1280,6 +1281,7 @@ function createTaskCard(list, todo) {
   `;
 
   card.querySelector(".complete-button").addEventListener("click", () => toggleTodo(list.name, todo.id));
+  card.querySelector(".task-title").addEventListener("click", () => editTaskTitle(list.name, todo.id, card));
   card.querySelector('[data-action="star"]').addEventListener("click", () => toggleStar(list.name, todo.id));
   card.querySelector('[data-action="menu"]').addEventListener("click", (event) => {
     event.stopPropagation();
@@ -1292,10 +1294,67 @@ function createTaskCard(list, todo) {
   renderSubtasks(card.querySelector(".subtasks"), list.name, todo);
 
   if (activeMenu === menuId) {
-    card.querySelector(".menu-wrap").append(createTaskMenu(list, todo));
+    const menuWrap = card.querySelector(".menu-wrap");
+    menuWrap.append(createTaskMenu(list, todo));
+    positionFloatingMenu(menuWrap.querySelector(".task-menu"));
   }
 
   return card;
+}
+
+function positionFloatingMenu(menu) {
+  if (!menu) {
+    return;
+  }
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    const padding = 12;
+    menu.classList.toggle("align-left", rect.left < padding);
+  });
+}
+
+function editTaskTitle(listName, todoId, card) {
+  const todo = findTodo(listName, todoId);
+  const titleButton = card.querySelector(".task-title");
+  if (!todo || !titleButton || card.querySelector(".task-title-input")) {
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.className = "task-title-input";
+  input.type = "text";
+  input.value = todo.title;
+  input.setAttribute("aria-label", "할 일 이름 수정");
+  titleButton.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let isSaving = false;
+  const finish = async (shouldSave) => {
+    if (isSaving) {
+      return;
+    }
+    isSaving = true;
+    const nextTitle = input.value.trim();
+    if (shouldSave && nextTitle && nextTitle !== todo.title) {
+      todo.title = nextTitle;
+      activeMenu = null;
+      await saveAndRender();
+      return;
+    }
+    renderBoard();
+  };
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(true));
 }
 
 function createQuickAddForm(list) {
