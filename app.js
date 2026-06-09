@@ -69,6 +69,9 @@ const LIST_ICONS = [DEFAULT_LIST_ICON, "📌", "💼", "📚", "🛒", "🏠", "
 const LOCAL_STORAGE_KEY = "todo-dashboard-local-cache";
 const CHARACTER_REFRESH_INTERVAL_MS = 60 * 1000;
 const CHARACTER_OVERDUE_GRACE_HOURS = 1;
+const GEMINI_API_KEY = "";
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 const defaultData = {
   currentListName: "기본",
@@ -115,6 +118,7 @@ const elements = {
   boardEyebrow: document.querySelector("#board-eyebrow"),
   boardTitle: document.querySelector("#board-title"),
   boardSummary: document.querySelector("#board-summary"),
+  aiMotivationText: document.querySelector("#ai-motivation-text"),
   characterStatus: document.querySelector("#character-status"),
   characterMood: document.querySelector("#character-mood"),
   characterCopy: document.querySelector("#character-copy"),
@@ -223,6 +227,7 @@ elements.listForm.addEventListener("submit", async (event) => {
   activeView = "all";
   elements.listName.value = "";
   await saveAndRender();
+await generateMotivation(title);
 });
 
 setInterval(() => {
@@ -1281,7 +1286,8 @@ async function saveTaskModal(event) {
   }
   activeMenu = null;
   closeTaskModal();
-  await saveAndRender();
+await saveAndRender();
+await generateMotivation(title);
 }
 
 function editTask(listName, todoId) {
@@ -1432,5 +1438,42 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+async function generateMotivation(todoTitle) {
+  if (!elements.aiMotivationText) {
+    return;
+  }
 
+  elements.aiMotivationText.textContent = "AI가 동기부여 문구를 만드는 중입니다...";
+
+  try {
+    const response = await fetch(GEMINI_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: `할 일 "${todoTitle}"에 맞는 짧은 동기부여 문구를 한국어로 한 문장만 만들어줘.`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    elements.aiMotivationText.textContent =
+      text || "작은 시작이 큰 변화를 만듭니다. 지금 한 걸음만 해봐요!";
+  } catch (error) {
+    console.error(error);
+    elements.aiMotivationText.textContent =
+      "작은 시작이 큰 변화를 만듭니다. 지금 한 걸음만 해봐요!";
+  }
+}
 initializeFirebase();
