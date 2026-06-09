@@ -652,31 +652,6 @@ select:disabled {
   max-width: 420px;
 }
 
-.ai-motivation {
-  display: grid;
-  gap: 6px;
-  width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.64);
-  border-radius: 14px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
-  text-align: right;
-}
-
-.ai-motivation strong {
-  color: var(--accent-strong);
-  font-size: 12px;
-}
-
-.ai-motivation span {
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
 .character-status {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px;
@@ -713,6 +688,12 @@ select:disabled {
   font-size: 12px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.ai-coach-copy {
+  display: block;
+  margin-top: 6px;
+  color: var(--text) !important;
 }
 
 .character-status[data-mood="sad"],
@@ -2515,12 +2496,16 @@ select:disabled {
     text-overflow: ellipsis;
   }
 
-  .character-status-copy span {
+  #character-copy {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip: rect(0 0 0 0);
+  }
+
+  .ai-coach-copy {
+    display: none;
   }
 
   .progress-character {
