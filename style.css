@@ -632,6 +632,31 @@ select:disabled {
   max-width: 420px;
 }
 
+.ai-motivation {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.64);
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  text-align: right;
+}
+
+.ai-motivation strong {
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.ai-motivation span {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .character-status {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px;
