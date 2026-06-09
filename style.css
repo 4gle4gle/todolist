@@ -64,6 +64,7 @@ select:disabled {
 .app-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  height: 100vh;
   min-height: 100vh;
 }
 
@@ -72,7 +73,9 @@ select:disabled {
   z-index: 1;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-width: 0;
+  overflow: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.58);
   background: rgba(255, 255, 255, 0.66);
   backdrop-filter: var(--glass-blur);
@@ -464,8 +467,12 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 0 0 auto;
+  margin-top: auto;
   border-top: 1px solid var(--line);
   padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: var(--glass-blur);
 }
 
 .welcome-message {
@@ -2205,10 +2212,13 @@ select:disabled {
 @media (max-width: 860px) {
   .app-layout {
     grid-template-columns: 1fr;
+    height: auto;
   }
 
   .sidebar {
+    height: auto;
     max-height: none;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
