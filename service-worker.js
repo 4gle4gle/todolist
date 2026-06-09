@@ -1,4 +1,4 @@
-const CACHE_NAME = "todo-dashboard-v3";
+const CACHE_NAME = "todo-dashboard-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
