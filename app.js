@@ -131,6 +131,7 @@ const elements = {
   boardTitle: document.querySelector("#board-title"),
   boardSummary: document.querySelector("#board-summary"),
   aiMotivationText: document.querySelector("#ai-motivation-text"),
+  aiCoachButton: document.querySelector("#ai-coach-button"),
   characterStatus: document.querySelector("#character-status"),
   characterMood: document.querySelector("#character-mood"),
   characterCopy: document.querySelector("#character-copy"),
@@ -234,6 +235,7 @@ elements.taskModal.addEventListener("click", (event) => {
 elements.taskModalTitle.addEventListener("input", updateTaskModalSaveState);
 elements.taskModalAllDay.addEventListener("change", updateTaskModalTimeState);
 elements.taskModalForm.addEventListener("submit", saveTaskModal);
+elements.aiCoachButton?.addEventListener("click", () => generateDailyCoach());
 
 elements.allViewButton.addEventListener("click", () => {
   activeView = "all";
@@ -1422,6 +1424,7 @@ function createTaskMenu(list, todo) {
       <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
     </label>
     <button type="button" data-action="subtask">하위 할 일 추가</button>
+    <button type="button" data-action="ai-subtasks">AI 하위 작업 추천</button>
     <button type="button" data-action="edit">내용 수정</button>
     <button type="button" data-action="delete">삭제</button>
     <div class="menu-label">이동할 목록...</div>
@@ -1433,6 +1436,7 @@ function createTaskMenu(list, todo) {
     await saveAndRender();
   });
   menu.querySelector('[data-action="subtask"]').addEventListener("click", () => addSubtask(list.name, todo.id));
+  menu.querySelector('[data-action="ai-subtasks"]').addEventListener("click", () => suggestSubtasks(list.name, todo.id));
   menu.querySelector('[data-action="edit"]').addEventListener("click", () => editTask(list.name, todo.id));
   menu.querySelector('[data-action="delete"]').addEventListener("click", () => deleteTask(list.name, todo.id));
 
@@ -2188,6 +2192,61 @@ async function addSubtask(listName, todoId) {
   await saveAndRender();
 }
 
+async function suggestSubtasks(listName, todoId) {
+  const todo = findTodo(listName, todoId);
+  if (!todo) {
+    return;
+  }
+
+  activeMenu = null;
+  if (elements.aiMotivationText) {
+    elements.aiMotivationText.textContent = `"${todo.title}" 하위 작업을 추천하는 중입니다...`;
+  }
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "subtasks", todoTitle: todo.title }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini endpoint failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const existingTitles = new Set(todo.subtasks.map((subtask) => subtask.title));
+    const suggestions = Array.isArray(data.subtasks)
+      ? data.subtasks.map((title) => String(title).trim()).filter(Boolean)
+      : [];
+    const nextSuggestions = suggestions
+      .filter((title) => !existingTitles.has(title))
+      .slice(0, 5);
+
+    if (nextSuggestions.length === 0) {
+      if (elements.aiMotivationText) {
+        elements.aiMotivationText.textContent = "이미 추가할 만한 하위 작업이 충분합니다.";
+      }
+      await saveAndRender();
+      return;
+    }
+
+    nextSuggestions.forEach((title) => {
+      todo.subtasks.push({ id: nextSubtaskId(todo), title, completed: false });
+    });
+    if (elements.aiMotivationText) {
+      elements.aiMotivationText.textContent = `하위 작업 ${nextSuggestions.length}개를 추가했습니다.`;
+    }
+    await saveAndRender();
+  } catch (error) {
+    console.error(error);
+    if (elements.aiMotivationText) {
+      elements.aiMotivationText.textContent = "하위 작업 추천을 불러오지 못했습니다.";
+    }
+    renderBoard();
+  }
+}
+
 async function toggleTodo(listName, todoId) {
   const todo = findTodo(listName, todoId);
   if (!todo) {
@@ -2367,6 +2426,39 @@ async function generateMotivation(todoTitle) {
     console.error(error);
     elements.aiMotivationText.textContent =
       `"${todoTitle}" 작업을 시작했어요. 작은 시작이 큰 변화를 만듭니다.`;
+  }
+}
+
+async function generateDailyCoach() {
+  if (!elements.aiMotivationText) {
+    return;
+  }
+
+  elements.aiMotivationText.textContent = "오늘의 실행 전략을 정리하는 중입니다...";
+  elements.aiCoachButton?.setAttribute("disabled", "");
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "daily-coach",
+        todos: allTodos(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini endpoint failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    elements.aiMotivationText.textContent =
+      data.text?.trim() || "가장 쉬운 일 하나부터 끝내며 흐름을 만들어보세요.";
+  } catch (error) {
+    console.error(error);
+    elements.aiMotivationText.textContent = "가장 쉬운 일 하나부터 끝내며 흐름을 만들어보세요.";
+  } finally {
+    elements.aiCoachButton?.removeAttribute("disabled");
   }
 }
 initializeFirebase();
