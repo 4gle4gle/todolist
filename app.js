@@ -1258,7 +1258,7 @@ function renderStarredBoard() {
 function createTaskCard(list, todo) {
   const card = document.createElement("div");
   const menuId = `${list.name}:${todo.id}`;
-  card.className = `task-card ${todo.completed ? "completed" : ""}`;
+  card.className = `task-card ${todo.completed ? "completed" : ""} ${activeMenu === menuId ? "menu-open" : ""}`;
   card.innerHTML = `
     <div class="task-main">
       <div class="task-left">

@@ -1580,11 +1580,16 @@ select:disabled {
   position: relative;
   display: grid;
   gap: 8px;
+  z-index: 0;
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 9px 8px;
   background: rgba(255, 255, 255, 0.52);
   backdrop-filter: blur(10px);
+}
+
+.task-card.menu-open {
+  z-index: 90;
 }
 
 .task-card:hover {
