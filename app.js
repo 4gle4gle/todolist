@@ -220,6 +220,10 @@ elements.feedbackContent.addEventListener("input", updateFeedbackSubmitState);
 elements.feedbackModalForm.addEventListener("submit", submitFeedback);
 
 elements.createTaskButton.addEventListener("click", () => {
+  activeView = "all";
+  activeMenu = null;
+  activeListMenu = null;
+  render();
   openTaskModal(state.currentListName);
 });
 
@@ -1542,38 +1546,56 @@ function getProgressCharacterStatus(todos, now = new Date()) {
 
   if (total === 0) {
     return {
-      mood: "tired",
-      copy: "아직 할 일이 없어요. 새 작업을 만들면 표정이 바뀝니다.",
+      mood: "proud",
+      copy: "\uC544\uC9C1 \uD560 \uC77C\uC774 \uC5C6\uC5B4\uC694. \uD560 \uC77C\uC744 \uCD94\uAC00\uD558\uBA74 \uC0C1\uD0DC\uAC00 \uBC14\uB01D\uB2C8\uB2E4.",
     };
   }
 
   if (active.length === 0) {
     return {
       mood: "proud",
-      copy: "모든 할 일을 완료했어요.",
+      copy: "\uBAA8\uB4E0 \uD560 \uC77C\uC744 \uC644\uB8CC\uD588\uC5B4\uC694.",
     };
   }
 
+  const loadMood = getTaskLoadMood(active.length);
   const characterOverdueTodos = active.filter((todo) => isCharacterOverdue(todo, now));
-  if (characterOverdueTodos.length === 0) {
-    const createdTodayCount = active.filter((todo) => isCreatedToday(todo, now)).length;
-    return {
-      mood: "tired",
-      copy: createdTodayCount > 0
-        ? `오늘 추가한 할 일 ${createdTodayCount}개가 있어요.`
-        : `진행 중 ${active.length}개가 아직 마감 전이거나 유예 시간 안입니다.`,
-    };
-  }
-
-  const longestOverdueHours = Math.max(
-    ...characterOverdueTodos.map((todo) => hoursSinceDue(todo.dueAt, now)),
-  );
-  const mood = getOverdueMood(longestOverdueHours);
+  const overdueMood = characterOverdueTodos.length > 0
+    ? getOverdueMood(Math.max(...characterOverdueTodos.map((todo) => hoursSinceDue(todo.dueAt, now))))
+    : "proud";
+  const mood = getMoreNegativeMood(loadMood, overdueMood);
+  const createdTodayCount = active.filter((todo) => isCreatedToday(todo, now)).length;
+  const todayCopy = createdTodayCount > 0 ? ` \uC624\uB298 \uCD94\uAC00\uD55C \uD560 \uC77C ${createdTodayCount}\uAC1C \uD3EC\uD568.` : "";
+  const overdueCopy = characterOverdueTodos.length > 0 ? ` \uAE30\uD55C \uC9C0\uB09C \uD560 \uC77C ${characterOverdueTodos.length}\uAC1C\uAC00 \uC788\uC5B4\uC694.` : "";
 
   return {
     mood,
-    copy: `기한 지난 할 일 ${characterOverdueTodos.length}개, 최대 ${formatOverdueDuration(longestOverdueHours)} 지났어요.`,
+    copy: `\uC9C4\uD589 \uC911\uC778 \uD560 \uC77C ${active.length}\uAC1C\uC785\uB2C8\uB2E4.${todayCopy}${overdueCopy}`,
   };
+}
+
+function getTaskLoadMood(activeCount) {
+  if (activeCount >= 18) {
+    return "angry";
+  }
+  if (activeCount >= 13) {
+    return "panic";
+  }
+  if (activeCount >= 9) {
+    return "warning";
+  }
+  if (activeCount >= 6) {
+    return "sad";
+  }
+  if (activeCount >= 3) {
+    return "tired";
+  }
+  return "proud";
+}
+
+function getMoreNegativeMood(left, right) {
+  const order = ["proud", "tired", "sad", "warning", "panic", "angry"];
+  return order.indexOf(left) >= order.indexOf(right) ? left : right;
 }
 
 function getOverdueMood(hours) {
@@ -2335,3 +2357,11 @@ function escapeHtml(value) {
 }
 
 initializeFirebase();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  });
+}
