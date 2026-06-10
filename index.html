@@ -71,6 +71,8 @@
                   <span class="sync-dot" aria-hidden="true"></span>
                   <span id="auth-message">로컬 캐시 사용 중</span>
                 </div>
+                <button class="profile-menu-nav" id="profile-about-button" type="button">소개</button>
+                <button class="profile-menu-nav" id="profile-developer-button" type="button" hidden>개발자</button>
                 <button class="profile-logout-button" id="logout-button" type="button">로그아웃</button>
               </div>
             </div>
@@ -104,6 +106,20 @@
         <span id="undo-message">목록을 삭제했습니다.</span>
         <button id="undo-button" type="button">실행취소</button>
       </div>
+      <button class="mobile-create-button" id="mobile-create-task-button" type="button" aria-label="할 일 추가">
+        <span>+</span>
+      </button>
+      <form class="mobile-quick-task" id="mobile-quick-task" hidden>
+        <input id="mobile-quick-task-title" type="text" placeholder="새 할 일" autocomplete="off" />
+        <div class="mobile-quick-task-actions">
+          <button id="mobile-quick-task-details" type="button" aria-label="세부정보 추가">☰</button>
+          <label aria-label="날짜 설정">
+            <span>◴</span>
+            <input id="mobile-quick-task-due" type="datetime-local" />
+          </label>
+          <button id="mobile-quick-task-star" type="button" aria-label="별표 표시">☆</button>
+        </div>
+      </form>
       <div class="feedback-modal-backdrop" id="feedback-modal" hidden>
         <form class="feedback-modal" id="feedback-modal-form" aria-labelledby="feedback-modal-title">
           <button class="feedback-modal-close" id="feedback-modal-close" type="button" aria-label="닫기">×</button>

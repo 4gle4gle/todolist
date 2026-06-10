@@ -103,6 +103,9 @@ let deletedSnapshot = null;
 let undoTimer = null;
 let editingTask = null;
 let quickAddListName = null;
+let mobileQuickAddListName = null;
+let mobileQuickAddStarred = false;
+let mobileListSyncFrame = 0;
 let feedbackItems = [];
 let isFeedbackLoading = false;
 let isCurrentDeveloper = false;
@@ -119,8 +122,11 @@ const elements = {
   profileEmail: document.querySelector("#profile-email"),
   profileSync: document.querySelector("#profile-sync"),
   welcomeMessage: document.querySelector("#welcome-message"),
+  profileAboutButton: document.querySelector("#profile-about-button"),
+  profileDeveloperButton: document.querySelector("#profile-developer-button"),
   logoutButton: document.querySelector("#logout-button"),
   createTaskButton: document.querySelector("#create-task-button"),
+  mobileCreateTaskButton: document.querySelector("#mobile-create-task-button"),
   allViewButton: document.querySelector("#all-view-button"),
   starredViewButton: document.querySelector("#starred-view-button"),
   aboutViewButton: document.querySelector("#about-view-button"),
@@ -158,6 +164,11 @@ const elements = {
   taskModalDescription: document.querySelector("#task-modal-description"),
   taskModalList: document.querySelector("#task-modal-list"),
   taskModalSave: document.querySelector("#task-modal-save"),
+  mobileQuickTask: document.querySelector("#mobile-quick-task"),
+  mobileQuickTaskTitle: document.querySelector("#mobile-quick-task-title"),
+  mobileQuickTaskDetails: document.querySelector("#mobile-quick-task-details"),
+  mobileQuickTaskDue: document.querySelector("#mobile-quick-task-due"),
+  mobileQuickTaskStar: document.querySelector("#mobile-quick-task-star"),
 };
 
 document.addEventListener("click", (event) => {
@@ -172,6 +183,14 @@ document.addEventListener("click", (event) => {
   if (!event.target.closest(".profile-wrap")) {
     setProfileMenuOpen(false);
   }
+  if (
+    elements.mobileQuickTask &&
+    !elements.mobileQuickTask.hidden &&
+    !event.target.closest(".mobile-quick-task") &&
+    !event.target.closest("#mobile-create-task-button")
+  ) {
+    saveMobileQuickTask();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -180,6 +199,9 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && !elements.feedbackModal.hidden) {
     closeFeedbackModal();
+  }
+  if (event.key === "Escape" && elements.mobileQuickTask && !elements.mobileQuickTask.hidden) {
+    closeMobileQuickTask(false);
   }
 });
 
@@ -206,6 +228,26 @@ elements.profileButton.addEventListener("click", () => {
   setProfileMenuOpen(!profileMenuOpen);
 });
 
+elements.profileAboutButton.addEventListener("click", () => {
+  activeView = "about";
+  activeMenu = null;
+  activeListMenu = null;
+  setProfileMenuOpen(false);
+  render();
+});
+
+elements.profileDeveloperButton.addEventListener("click", async () => {
+  if (!isDeveloperUser()) {
+    return;
+  }
+  activeView = "developer";
+  activeMenu = null;
+  activeListMenu = null;
+  setProfileMenuOpen(false);
+  await loadFeedbackItems();
+  render();
+});
+
 elements.logoutButton.addEventListener("click", async () => {
   if (auth) {
     await signOut(auth);
@@ -224,12 +266,24 @@ elements.feedbackContent.addEventListener("input", updateFeedbackSubmitState);
 elements.feedbackModalForm.addEventListener("submit", submitFeedback);
 
 elements.createTaskButton.addEventListener("click", () => {
+  openCreateTaskFlow();
+});
+
+elements.mobileCreateTaskButton.addEventListener("click", () => {
+  openCreateTaskFlow();
+});
+
+function openCreateTaskFlow() {
   activeView = "all";
   activeMenu = null;
   activeListMenu = null;
   render();
+  if (isMobileBoardLayout()) {
+    openMobileQuickTask(state.currentListName);
+    return;
+  }
   openTaskModal(state.currentListName);
-});
+}
 
 elements.taskModalClose.addEventListener("click", closeTaskModal);
 elements.taskModal.addEventListener("click", (event) => {
@@ -240,6 +294,38 @@ elements.taskModal.addEventListener("click", (event) => {
 elements.taskModalTitle.addEventListener("input", updateTaskModalSaveState);
 elements.taskModalAllDay.addEventListener("change", updateTaskModalTimeState);
 elements.taskModalForm.addEventListener("submit", saveTaskModal);
+elements.mobileQuickTask.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await saveMobileQuickTask();
+});
+elements.mobileQuickTaskDetails.addEventListener("click", () => {
+  const listName = mobileQuickAddListName || state.currentListName;
+  const dueAt = mobileQuickDueAt();
+  const title = elements.mobileQuickTaskTitle.value.trim();
+  closeMobileQuickTask(false);
+  openTaskModal(listName, null, {
+    title,
+    dueAt,
+    starred: mobileQuickAddStarred,
+  });
+});
+elements.mobileQuickTaskDue.addEventListener("change", () => {
+  elements.mobileQuickTask.dataset.hasDue = String(Boolean(elements.mobileQuickTaskDue.value));
+});
+elements.mobileQuickTaskStar.addEventListener("click", () => {
+  mobileQuickAddStarred = !mobileQuickAddStarred;
+  renderMobileQuickTaskState();
+});
+
+elements.columns.addEventListener("scroll", () => {
+  if (!isMobileBoardLayout() || activeView !== "all") {
+    return;
+  }
+  if (mobileListSyncFrame) {
+    cancelAnimationFrame(mobileListSyncFrame);
+  }
+  mobileListSyncFrame = requestAnimationFrame(syncMobileListNavFromScroll);
+});
 
 elements.allViewButton.addEventListener("click", () => {
   activeView = "all";
@@ -525,12 +611,17 @@ function normalizeState(data) {
 function setAppEnabled(enabled) {
   [
     elements.createTaskButton,
+    elements.mobileCreateTaskButton,
     elements.allViewButton,
     elements.starredViewButton,
     elements.aboutViewButton,
     elements.developerViewButton,
     elements.listName,
     elements.listForm.querySelector("button"),
+    elements.mobileQuickTaskTitle,
+    elements.mobileQuickTaskDetails,
+    elements.mobileQuickTaskDue,
+    elements.mobileQuickTaskStar,
   ].forEach((element) => {
     element.disabled = !enabled;
   });
@@ -550,6 +641,7 @@ function renderSignedIn(user) {
   elements.profileEmail.textContent = user.email || "이메일 정보 없음";
   elements.profileButton.setAttribute("aria-label", `${displayName} 계정 옵션 열기`);
   elements.developerViewButton.hidden = !isDeveloperUser();
+  elements.profileDeveloperButton.hidden = !isDeveloperUser();
   if (!isDeveloperUser() && activeView === "developer") {
     activeView = "all";
   }
@@ -565,6 +657,7 @@ function renderSignedOut(message = "여러 기기 연동과 안정적인 백업�
   elements.profileWrap.hidden = true;
   elements.welcomeMessage.hidden = true;
   elements.developerViewButton.hidden = true;
+  elements.profileDeveloperButton.hidden = true;
   if (activeView === "developer") {
     activeView = "all";
   }
@@ -600,6 +693,8 @@ function renderViewButtons() {
   elements.starredViewButton.classList.toggle("active", activeView === "starred");
   elements.aboutViewButton.classList.toggle("active", activeView === "about");
   elements.developerViewButton.classList.toggle("active", activeView === "developer");
+  elements.profileAboutButton.classList.toggle("active", activeView === "about");
+  elements.profileDeveloperButton.classList.toggle("active", activeView === "developer");
 }
 
 function renderLists() {
@@ -625,7 +720,8 @@ function renderLists() {
 
     const selectButton = document.createElement("button");
     selectButton.type = "button";
-    selectButton.className = `list-select-button ${list.visible ? "active" : ""}`;
+    selectButton.className = `list-select-button ${list.visible ? "active" : ""} ${state.currentListName === list.name ? "current" : ""}`;
+    selectButton.dataset.listName = list.name;
     selectButton.innerHTML = `
       <span class="list-name">
         <span class="list-icon">${escapeHtml(list.icon)}</span>
@@ -635,12 +731,44 @@ function renderLists() {
     `;
     selectButton.addEventListener("click", async () => {
       activeListMenu = null;
+      if (isMobileBoardLayout()) {
+        await selectMobileList(list);
+        return;
+      }
       await setListVisibility(list, !list.visible);
     });
 
     item.append(visibilityCell, selectButton);
     elements.listNav.append(item);
   });
+
+  const addItem = document.createElement("div");
+  addItem.className = "list-nav-item mobile-list-add-item";
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "mobile-list-add-button";
+  addButton.innerHTML = '<span>+</span><span>새 목록</span>';
+  addButton.addEventListener("click", createListFromMobileNav);
+  addItem.append(addButton);
+  elements.listNav.append(addItem);
+}
+
+async function createListFromMobileNav() {
+  const name = prompt("새 목록 이름을 입력하세요.");
+  const trimmed = name?.trim();
+  if (!trimmed || state.lists.some((list) => list.name === trimmed)) {
+    return;
+  }
+  state.lists.push({ name: trimmed, icon: DEFAULT_LIST_ICON, visible: true, sortBy: "manual", todos: [] });
+  state.currentListName = trimmed;
+  activeView = "all";
+  await saveAndRender();
+  if (isMobileBoardLayout()) {
+    requestAnimationFrame(() => {
+      const column = elements.columns.querySelector(`[data-list-name="${cssStringEscape(trimmed)}"]`);
+      column?.scrollIntoView({ block: "nearest", inline: "start", behavior: "smooth" });
+    });
+  }
 }
 
 function createListMenu(list) {
@@ -708,6 +836,28 @@ async function setListVisibility(list, visible) {
     state.currentListName = state.lists.find((item) => item.visible)?.name || list.name;
   }
   await saveAndRender();
+}
+
+function isMobileBoardLayout() {
+  return window.matchMedia("(max-width: 560px)").matches;
+}
+
+async function selectMobileList(list) {
+  list.visible = true;
+  state.currentListName = list.name;
+  activeView = "all";
+  await saveAndRender();
+  requestAnimationFrame(() => {
+    const column = elements.columns.querySelector(`[data-list-name="${cssStringEscape(list.name)}"]`);
+    column?.scrollIntoView({ block: "nearest", inline: "start", behavior: "smooth" });
+  });
+}
+
+function cssStringEscape(value) {
+  if (window.CSS?.escape) {
+    return CSS.escape(value);
+  }
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 async function renameList(listName) {
@@ -882,6 +1032,7 @@ function renderBoard() {
   columns.forEach((list) => {
     const column = document.createElement("article");
     column.className = "column";
+    column.dataset.listName = list.name;
     const todos = list.todos;
     const active = todos.filter((todo) => !todo.completed || recentlyCompleted.has(todoKey(list.name, todo.id)));
     const completed = todos.filter((todo) => todo.completed && !recentlyCompleted.has(todoKey(list.name, todo.id)));
@@ -890,7 +1041,7 @@ function renderBoard() {
       <div class="column-header">
         <h3><span class="column-icon">${escapeHtml(list.icon)}</span>${escapeHtml(list.name)}</h3>
         <div class="column-actions">
-          <span class="column-count">완료됨 ${list.todos.filter((todo) => todo.completed).length}</span>
+          <span class="column-count" data-mobile-count="${list.todos.filter((todo) => todo.completed).length}">완료됨 ${list.todos.filter((todo) => todo.completed).length}</span>
           <span class="list-menu-wrap">
             <button class="list-edit-button ${activeListMenu === list.name ? "active" : ""}" type="button" aria-label="${escapeHtml(list.name)} 목록 메뉴">⋮</button>
           </span>
@@ -911,7 +1062,12 @@ function renderBoard() {
       </div>
     `;
 
-    column.querySelector(".add-task-button").addEventListener("click", () => {
+    column.querySelector(".add-task-button").addEventListener("click", (event) => {
+      if (isMobileBoardLayout()) {
+        event.stopPropagation();
+        openMobileQuickTask(list.name);
+        return;
+      }
       quickAddListName = list.name;
       renderBoard();
     });
@@ -1479,6 +1635,96 @@ function createQuickAddForm(list) {
 
   queueMicrotask(() => titleInput.focus());
   return form;
+}
+
+function openMobileQuickTask(listName) {
+  mobileQuickAddListName = findList(listName)?.name || currentList().name;
+  mobileQuickAddStarred = activeView === "starred";
+  elements.mobileQuickTaskTitle.value = "";
+  elements.mobileQuickTaskDue.value = "";
+  elements.mobileQuickTask.hidden = false;
+  renderMobileQuickTaskState();
+  requestAnimationFrame(() => elements.mobileQuickTaskTitle.focus());
+}
+
+function closeMobileQuickTask(shouldClear = true) {
+  elements.mobileQuickTask.hidden = true;
+  if (shouldClear) {
+    elements.mobileQuickTaskTitle.value = "";
+    elements.mobileQuickTaskDue.value = "";
+    mobileQuickAddStarred = false;
+    mobileQuickAddListName = null;
+    renderMobileQuickTaskState();
+  }
+}
+
+function renderMobileQuickTaskState() {
+  elements.mobileQuickTask.dataset.starred = String(mobileQuickAddStarred);
+  elements.mobileQuickTask.dataset.hasDue = String(Boolean(elements.mobileQuickTaskDue.value));
+  elements.mobileQuickTaskStar.textContent = mobileQuickAddStarred ? "★" : "☆";
+  elements.mobileQuickTaskStar.setAttribute("aria-pressed", String(mobileQuickAddStarred));
+}
+
+function mobileQuickDueAt() {
+  return elements.mobileQuickTaskDue.value || "";
+}
+
+async function saveMobileQuickTask() {
+  if (!elements.mobileQuickTask || elements.mobileQuickTask.hidden) {
+    return;
+  }
+  const title = elements.mobileQuickTaskTitle.value.trim();
+  if (!title) {
+    closeMobileQuickTask();
+    return;
+  }
+  const list = findList(mobileQuickAddListName) || currentList();
+  const now = toDatetimeLocalValue(new Date());
+  list.todos.push({
+    id: nextTodoId(list),
+    title,
+    description: "",
+    dueAt: mobileQuickDueAt(),
+    createdAt: now,
+    repeat: "none",
+    completed: false,
+    completedAt: "",
+    starred: mobileQuickAddStarred,
+    starredAt: mobileQuickAddStarred ? now : "",
+    subtasks: [],
+  });
+  state.currentListName = list.name;
+  activeView = mobileQuickAddStarred ? "starred" : "all";
+  closeMobileQuickTask();
+  await saveAndRender();
+  scheduleDailyCoach();
+}
+
+function syncMobileListNavFromScroll() {
+  mobileListSyncFrame = 0;
+  const columns = Array.from(elements.columns.querySelectorAll(".column[data-list-name]"));
+  if (columns.length === 0) {
+    return;
+  }
+  const viewportCenter = elements.columns.getBoundingClientRect().left + elements.columns.clientWidth / 2;
+  const closest = columns.reduce((current, column) => {
+    const rect = column.getBoundingClientRect();
+    const distance = Math.abs(rect.left + rect.width / 2 - viewportCenter);
+    return distance < current.distance ? { column, distance } : current;
+  }, { column: null, distance: Number.POSITIVE_INFINITY }).column;
+  const nextListName = closest?.dataset.listName;
+  if (!nextListName || nextListName === state.currentListName) {
+    return;
+  }
+  state.currentListName = nextListName;
+  renderViewButtons();
+  elements.listNav.querySelectorAll(".list-select-button").forEach((button) => {
+    button.classList.toggle("current", button.dataset.listName === nextListName);
+  });
+  requestAnimationFrame(() => {
+    const currentTab = elements.listNav.querySelector(".list-select-button.current");
+    currentTab?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  });
 }
 
 function createTaskMenu(list, todo) {
