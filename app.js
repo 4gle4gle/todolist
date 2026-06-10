@@ -105,6 +105,7 @@ let editingTask = null;
 let quickAddListName = null;
 let mobileQuickAddListName = null;
 let mobileQuickAddStarred = false;
+let mobileListSyncFrame = 0;
 let feedbackItems = [];
 let isFeedbackLoading = false;
 let isCurrentDeveloper = false;
@@ -314,6 +315,16 @@ elements.mobileQuickTaskDue.addEventListener("change", () => {
 elements.mobileQuickTaskStar.addEventListener("click", () => {
   mobileQuickAddStarred = !mobileQuickAddStarred;
   renderMobileQuickTaskState();
+});
+
+elements.columns.addEventListener("scroll", () => {
+  if (!isMobileBoardLayout() || activeView !== "all") {
+    return;
+  }
+  if (mobileListSyncFrame) {
+    cancelAnimationFrame(mobileListSyncFrame);
+  }
+  mobileListSyncFrame = requestAnimationFrame(syncMobileListNavFromScroll);
 });
 
 elements.allViewButton.addEventListener("click", () => {
@@ -710,6 +721,7 @@ function renderLists() {
     const selectButton = document.createElement("button");
     selectButton.type = "button";
     selectButton.className = `list-select-button ${list.visible ? "active" : ""} ${state.currentListName === list.name ? "current" : ""}`;
+    selectButton.dataset.listName = list.name;
     selectButton.innerHTML = `
       <span class="list-name">
         <span class="list-icon">${escapeHtml(list.icon)}</span>
@@ -1050,7 +1062,12 @@ function renderBoard() {
       </div>
     `;
 
-    column.querySelector(".add-task-button").addEventListener("click", () => {
+    column.querySelector(".add-task-button").addEventListener("click", (event) => {
+      if (isMobileBoardLayout()) {
+        event.stopPropagation();
+        openMobileQuickTask(list.name);
+        return;
+      }
       quickAddListName = list.name;
       renderBoard();
     });
@@ -1681,6 +1698,33 @@ async function saveMobileQuickTask() {
   closeMobileQuickTask();
   await saveAndRender();
   scheduleDailyCoach();
+}
+
+function syncMobileListNavFromScroll() {
+  mobileListSyncFrame = 0;
+  const columns = Array.from(elements.columns.querySelectorAll(".column[data-list-name]"));
+  if (columns.length === 0) {
+    return;
+  }
+  const viewportCenter = elements.columns.getBoundingClientRect().left + elements.columns.clientWidth / 2;
+  const closest = columns.reduce((current, column) => {
+    const rect = column.getBoundingClientRect();
+    const distance = Math.abs(rect.left + rect.width / 2 - viewportCenter);
+    return distance < current.distance ? { column, distance } : current;
+  }, { column: null, distance: Number.POSITIVE_INFINITY }).column;
+  const nextListName = closest?.dataset.listName;
+  if (!nextListName || nextListName === state.currentListName) {
+    return;
+  }
+  state.currentListName = nextListName;
+  renderViewButtons();
+  elements.listNav.querySelectorAll(".list-select-button").forEach((button) => {
+    button.classList.toggle("current", button.dataset.listName === nextListName);
+  });
+  requestAnimationFrame(() => {
+    const currentTab = elements.listNav.querySelector(".list-select-button.current");
+    currentTab?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  });
 }
 
 function createTaskMenu(list, todo) {
