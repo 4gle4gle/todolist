@@ -1,10 +1,11 @@
-const CACHE_NAME = "todo-dashboard-v7";
+const CACHE_NAME = "todobuddy-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./manifest.webmanifest",
+  "./assets/icons/todobuddy-logo.png",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   "./character-angry.png",

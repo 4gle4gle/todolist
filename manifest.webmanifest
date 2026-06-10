@@ -1,7 +1,7 @@
 {
-  "name": "Todo Dashboard",
-  "short_name": "Todo",
-  "description": "A mobile-ready todo dashboard that works offline.",
+  "name": "투두버디",
+  "short_name": "투두버디",
+  "description": "할 일을 정리하고 진행 상태를 함께 확인하는 투두버디입니다.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

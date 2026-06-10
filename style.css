@@ -104,6 +104,15 @@ select:disabled {
   font-weight: 900;
 }
 
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 8px 18px rgba(124, 72, 32, 0.12);
+}
+
 .brand h1 {
   margin: 0;
   color: var(--text);
@@ -902,6 +911,15 @@ select:disabled {
   border-radius: 10px;
   background: var(--accent);
   font-size: 30px;
+}
+
+.about-hero-logo {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: 0 14px 30px rgba(124, 72, 32, 0.16);
 }
 
 .about-hero h3,
@@ -2687,20 +2705,18 @@ select:disabled {
     display: none;
   }
 
+  .brand-logo {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 14px;
+  }
+
   .brand h1 {
     color: var(--text);
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 800;
     letter-spacing: 0;
-  }
-
-  .brand h1 {
-    font-size: 0;
-  }
-
-  .brand h1::after {
-    content: "Tasks";
-    font-size: 24px;
   }
 
   .create-button,

@@ -1111,7 +1111,7 @@ function renderBoard() {
 
 function renderAboutBoard() {
   elements.boardEyebrow.textContent = "소개";
-  elements.boardTitle.textContent = "Todo Dashboard";
+  elements.boardTitle.textContent = "투두버디";
   elements.boardSummary.textContent = "프로젝트 정보와 업데이트 내역";
   elements.characterStatus.hidden = true;
   elements.columns.replaceChildren();
@@ -1120,9 +1120,9 @@ function renderAboutBoard() {
   panel.className = "about-panel";
   panel.innerHTML = `
     <section class="about-hero">
-      <div class="about-hero-mark">✓</div>
+      <img class="about-hero-logo" src="assets/icons/todobuddy-logo.png" alt="" />
       <div>
-        <h3>할 일</h3>
+        <h3>투두버디</h3>
         <div class="about-badges">
           <span>v1.0.0</span>
           <span>Productivity Beta</span>
@@ -1263,7 +1263,7 @@ function renderAboutBoard() {
       <span>⚑</span>
       문제 제보하기
     </button>
-    <p class="about-footer">© 2026 Todo Dashboard. All rights reserved.</p>
+    <p class="about-footer">© 2026 투두버디. All rights reserved.</p>
   `;
 
   panel.querySelector(".about-feedback-button").addEventListener("click", openFeedbackModal);
