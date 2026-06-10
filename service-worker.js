@@ -1,4 +1,4 @@
-const CACHE_NAME = "todobuddy-v9";
+const CACHE_NAME = "todobuddy-v11";
 const APP_SHELL = [
   "./",
   "./index.html",

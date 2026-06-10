@@ -70,11 +70,11 @@ const progressCharacters = {
   },
 };
 
-const DEFAULT_LIST_ICON = "📋";
-const LIST_ICONS = [DEFAULT_LIST_ICON, "📌", "💼", "📚", "🛒", "🏠", "💡", "🎯", "❤️", "⭐"];
+const DEFAULT_LIST_ICON = "";
 const LOCAL_STORAGE_KEY = "todo-dashboard-local-cache";
 const LOCAL_FEEDBACK_KEY = "todo-dashboard-feedback";
 const LOCAL_DEVELOPER_KEY = "todo-dashboard-developer";
+const THEME_STORAGE_KEY = "todo-dashboard-theme";
 const CHARACTER_REFRESH_INTERVAL_MS = 60 * 1000;
 const CHARACTER_OVERDUE_GRACE_HOURS = 1;
 const DEVELOPER_PASSWORD = "6767";
@@ -92,6 +92,7 @@ let currentUser = null;
 let activeView = "all";
 let activeMenu = null;
 let activeListMenu = null;
+let activeListMenuSource = null;
 let profileMenuOpen = false;
 let isBoardLoading = false;
 const recentlyCompleted = new Set();
@@ -128,6 +129,7 @@ const elements = {
   logoutButton: document.querySelector("#logout-button"),
   brandHomeButton: document.querySelector("#brand-home-button"),
   sidebarToggleButton: document.querySelector("#sidebar-toggle-button"),
+  themeToggleButton: document.querySelector("#theme-toggle-button"),
   createTaskButton: document.querySelector("#create-task-button"),
   mobileCreateTaskButton: document.querySelector("#mobile-create-task-button"),
   allViewButton: document.querySelector("#all-view-button"),
@@ -175,13 +177,21 @@ const elements = {
 };
 
 document.addEventListener("click", (event) => {
+  if (
+    !event.target.closest(".floating-picker") &&
+    !event.target.closest(".quick-add-time") &&
+    !event.target.closest(".due-badge")
+  ) {
+    closeFloatingPicker();
+  }
   if (!event.target.closest(".menu-wrap") && activeMenu) {
     activeMenu = null;
     render();
   }
   if (!event.target.closest(".list-menu-wrap") && activeListMenu) {
     activeListMenu = null;
-    renderBoard();
+    activeListMenuSource = null;
+    render();
   }
   if (!event.target.closest(".profile-wrap")) {
     setProfileMenuOpen(false);
@@ -235,6 +245,7 @@ elements.profileAboutButton.addEventListener("click", () => {
   activeView = "about";
   activeMenu = null;
   activeListMenu = null;
+  activeListMenuSource = null;
   setProfileMenuOpen(false);
   render();
 });
@@ -246,6 +257,7 @@ elements.profileDeveloperButton.addEventListener("click", async () => {
   activeView = "developer";
   activeMenu = null;
   activeListMenu = null;
+  activeListMenuSource = null;
   setProfileMenuOpen(false);
   await loadFeedbackItems();
   render();
@@ -285,6 +297,7 @@ function openCreateTaskFlow() {
   activeView = "all";
   activeMenu = null;
   activeListMenu = null;
+  activeListMenuSource = null;
   render();
   if (isMobileBoardLayout()) {
     openMobileQuickTask(state.currentListName);
@@ -325,6 +338,23 @@ elements.mobileQuickTaskStar.addEventListener("click", () => {
   renderMobileQuickTaskState();
 });
 
+function applyTheme(theme) {
+  const isDark = theme === "dark";
+  document.body.classList.toggle("theme-dark", isDark);
+  elements.themeToggleButton.textContent = isDark ? "☀" : "☾";
+  elements.themeToggleButton.setAttribute("aria-label", isDark ? "라이트 모드 켜기" : "다크 모드 켜기");
+  elements.themeToggleButton.setAttribute("aria-pressed", String(isDark));
+}
+
+function toggleTheme() {
+  const nextTheme = document.body.classList.contains("theme-dark") ? "light" : "dark";
+  localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  applyTheme(nextTheme);
+}
+
+applyTheme(localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light");
+elements.themeToggleButton.addEventListener("click", toggleTheme);
+
 elements.columns.addEventListener("scroll", () => {
   if (!isMobileBoardLayout() || !["all", "starred"].includes(activeView)) {
     return;
@@ -344,6 +374,7 @@ function goHome() {
   activeView = "all";
   activeMenu = null;
   activeListMenu = null;
+  activeListMenuSource = null;
   setProfileMenuOpen(false);
   render();
   requestAnimationFrame(() => {
@@ -372,6 +403,7 @@ elements.aboutViewButton.addEventListener("click", () => {
   activeView = "about";
   activeMenu = null;
   activeListMenu = null;
+  activeListMenuSource = null;
   render();
 });
 
@@ -379,6 +411,7 @@ elements.developerViewButton.addEventListener("click", async () => {
   activeView = "developer";
   activeMenu = null;
   activeListMenu = null;
+  activeListMenuSource = null;
   await loadFeedbackItems();
   render();
 });
@@ -606,7 +639,7 @@ function normalizeState(data) {
 
   const lists = data.lists.map((list) => ({
     name: String(list.name || "기본"),
-    icon: LIST_ICONS.includes(list.icon) ? list.icon : DEFAULT_LIST_ICON,
+    icon: DEFAULT_LIST_ICON,
     visible: list.visible !== false,
     sortBy: ["manual", "created", "due", "recent-starred", "title"].includes(list.sortBy) ? list.sortBy : "manual",
     todos: Array.isArray(list.todos)
@@ -755,21 +788,42 @@ function renderLists() {
     selectButton.dataset.listName = list.name;
     selectButton.innerHTML = `
       <span class="list-name">
-        <span class="list-icon">${escapeHtml(list.icon)}</span>
         <span class="list-title">${escapeHtml(list.name)}</span>
       </span>
       <span class="list-count">${activeTodos(list).length}</span>
     `;
     selectButton.addEventListener("click", async () => {
       activeListMenu = null;
+      activeListMenuSource = null;
       if (isMobileBoardLayout()) {
         await selectMobileList(list);
         return;
       }
-      await setListVisibility(list, !list.visible);
+      selectDesktopList(list);
     });
 
-    item.append(visibilityCell, selectButton);
+    const menuWrap = document.createElement("span");
+    menuWrap.className = "list-menu-wrap";
+    const menuButton = document.createElement("button");
+    menuButton.type = "button";
+    menuButton.className = `list-edit-button ${activeListMenu === list.name ? "active" : ""}`;
+    menuButton.setAttribute("aria-label", `${list.name} 목록 메뉴`);
+    menuButton.textContent = "⋮";
+    menuButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      activeMenu = null;
+      const isSameMenu = activeListMenu === list.name && activeListMenuSource === "sidebar";
+      activeListMenu = isSameMenu ? null : list.name;
+      activeListMenuSource = isSameMenu ? null : "sidebar";
+      render();
+    });
+    menuWrap.append(menuButton);
+    if (activeListMenu === list.name && activeListMenuSource === "sidebar") {
+      menuWrap.append(createListMenu(list));
+      positionFloatingMenu(menuWrap.querySelector(".list-menu"));
+    }
+
+    item.append(visibilityCell, selectButton, menuWrap);
     elements.listNav.append(item);
   });
 
@@ -873,6 +927,16 @@ function isMobileBoardLayout() {
   return window.matchMedia("(max-width: 560px)").matches;
 }
 
+function selectDesktopList(list) {
+  state.currentListName = list.name;
+  activeView = "all";
+  render();
+  requestAnimationFrame(() => {
+    const column = elements.columns.querySelector(`[data-list-name="${cssStringEscape(list.name)}"]`);
+    column?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  });
+}
+
 async function selectMobileList(list) {
   list.visible = true;
   state.currentListName = list.name;
@@ -900,7 +964,7 @@ async function renameList(listName) {
   if (nextName === null) {
     return;
   }
-  await updateList(list.name, nextName.trim(), list.icon);
+  await updateList(list.name, nextName.trim());
 }
 
 async function sortList(listName, sortBy) {
@@ -913,6 +977,7 @@ async function sortList(listName, sortBy) {
     sortTodos(list);
   }
   activeListMenu = null;
+  activeListMenuSource = null;
   await saveAndRender();
 }
 
@@ -951,6 +1016,7 @@ async function moveListFirst(listName) {
   state.lists.unshift(list);
   state.currentListName = list.name;
   activeListMenu = null;
+  activeListMenuSource = null;
   activeView = "all";
   await saveAndRender();
 }
@@ -993,6 +1059,7 @@ async function deleteTodoBatch(list, removed, message) {
   const removedIds = new Set(removed.map(({ todo }) => todo.id));
   list.todos = list.todos.filter((todo) => !removedIds.has(todo.id));
   activeListMenu = null;
+  activeListMenuSource = null;
   activeMenu = null;
   showUndoToast(message);
   await saveAndRender();
@@ -1002,7 +1069,7 @@ function renderBoard() {
   elements.boardArea.classList.toggle("starred-view", activeView === "starred" && !isBoardLoading);
   if (isBoardLoading) {
     elements.boardEyebrow.textContent = "데이터 확인 중";
-    elements.boardTitle.textContent = "작업 보드";
+    elements.boardTitle.textContent = "할 일";
     elements.boardSummary.textContent = "";
     elements.characterStatus.hidden = true;
     elements.columns.innerHTML = Array.from({ length: 3 }, (_, index) => `
@@ -1046,8 +1113,8 @@ function renderBoard() {
   const columns = visibleColumns();
   const total = state.lists.reduce((sum, list) => sum + list.todos.length, 0);
 
-  elements.boardEyebrow.textContent = "모든 할 일";
-  elements.boardTitle.textContent = "작업 보드";
+  elements.boardEyebrow.textContent = "";
+  elements.boardTitle.textContent = "할 일";
   elements.boardSummary.textContent = `전체 ${total}개, 완료 ${completedTodosCount()}개`;
   renderProgressCharacterStatus(allTodos());
 
@@ -1070,7 +1137,7 @@ function renderBoard() {
     const completedExpanded = expandedCompletedLists.has(list.name);
     column.innerHTML = `
       <div class="column-header">
-        <h3><span class="column-icon">${escapeHtml(list.icon)}</span>${escapeHtml(list.name)}</h3>
+        <h3>${escapeHtml(list.name)}</h3>
         <div class="column-actions">
           <span class="column-count" data-mobile-count="${list.todos.filter((todo) => todo.completed).length}">완료됨 ${list.todos.filter((todo) => todo.completed).length}</span>
           <span class="list-menu-wrap">
@@ -1107,10 +1174,12 @@ function renderBoard() {
     menuButton.addEventListener("click", (event) => {
       event.stopPropagation();
       activeMenu = null;
-      activeListMenu = activeListMenu === list.name ? null : list.name;
+      const isSameMenu = activeListMenu === list.name && activeListMenuSource === "column";
+      activeListMenu = isSameMenu ? null : list.name;
+      activeListMenuSource = isSameMenu ? null : "column";
       renderBoard();
     });
-    if (activeListMenu === list.name) {
+    if (activeListMenu === list.name && activeListMenuSource === "column") {
       menuWrap.append(createListMenu(list));
       positionFloatingMenu(menuWrap.querySelector(".list-menu"));
     }
@@ -1155,8 +1224,8 @@ function renderAboutBoard() {
       <div>
         <h3>투두버디</h3>
         <div class="about-badges">
-          <span>v1.0.0</span>
-          <span>Productivity Beta</span>
+          <span>v1.3.0</span>
+          <span>PWA Ready</span>
         </div>
       </div>
     </section>
@@ -1211,16 +1280,28 @@ function renderAboutBoard() {
       <div class="about-timeline">
         <article>
           <div class="about-version">
-            <strong>v1.0.0</strong>
+            <strong>v1.3.0</strong>
             <span>Latest</span>
           </div>
-          <p>목록별 할 일 보기, 중요 표시, 마감일 설정, 하위 할 일 추가 기능을 한 화면에서 사용할 수 있도록 정리했습니다.</p>
+          <p>투두버디 로고와 앱 이름을 통일하고, PC 사이드바 접기와 브랜드 홈 이동을 추가했습니다. 다크 모드, 모바일 계정 프로필 표시, 모바일 빠른 할 일 입력, 날짜와 시간 설정, 인라인 제목 수정, 삭제 실행 취소 흐름도 함께 정리했습니다.</p>
         </article>
         <article>
           <div class="about-version">
-            <strong>v0.9.0</strong>
+            <strong>v1.2.0</strong>
           </div>
-          <p>왼쪽 목록 탐색과 오른쪽 칼럼형 작업 영역을 분리해 여러 카테고리를 빠르게 훑어볼 수 있게 만들었습니다.</p>
+          <p>AI 코치 호출을 Vercel 서버리스 함수(/api/gemini)로 분리하고, 모바일 화면에서 사이드바, 계정 영역, 캐릭터 상태 카드가 자연스럽게 보이도록 반응형 UI를 개선했습니다. 진행도와 마감 상태에 따라 캐릭터 표정과 상태 문구가 바뀌도록 시각 피드백을 강화하고, PWA 매니페스트와 앱 아이콘, 서비스 워커를 추가했습니다.</p>
+        </article>
+        <article>
+          <div class="about-version">
+            <strong>v1.1.0</strong>
+          </div>
+          <p>Google 계정 로그인과 Firestore 계정별 저장을 추가했습니다. 로컬 캐시와 Google 계정 데이터를 병합하거나 백업할 수 있는 저장 흐름, Gemini API 기반 AI 코치, 목록 이름 변경, 목록 삭제, 첫 번째 위치로 이동, 정렬 기준 선택, 완료된 할 일 삭제, 오래된 할 일 정리 기능을 구현했습니다.</p>
+        </article>
+        <article>
+          <div class="about-version">
+            <strong>v1.0.0</strong>
+          </div>
+          <p>여러 작업 목록, 할 일 추가/수정/삭제, 마감일, 반복, 하위 작업, 완료 상태 변경 기능을 구현했습니다. 브라우저 localStorage 기반 저장과 완료율 링, 작업 상태 통계, 마감 분포 차트, 목록별 완료율 막대 시각화도 포함했습니다.</p>
         </article>
       </div>
     </section>
@@ -1249,10 +1330,10 @@ function renderAboutBoard() {
       </div>
       <div class="about-grid">
         ${[
-          ["Firebase", "Google 인증과 Firestore 저장"],
-          ["Vanilla JavaScript", "앱 상태와 화면 렌더링"],
-          ["CSS", "반응형 레이아웃과 시각 스타일"],
-          ["Vercel", "정적 웹 배포 환경"],
+          ["Firebase JS SDK", "Apache License 2.0. Google 로그인과 Firestore 저장 기능에 사용합니다."],
+          ["Google Gemini API", "Google AI 서비스 약관이 적용되는 외부 API입니다. 오픈소스 라이브러리는 아닙니다."],
+          ["Vercel", "배포와 서버리스 함수 실행에 사용하는 호스팅 플랫폼입니다. 플랫폼 약관이 적용됩니다."],
+          ["투두버디 앱 코드", "프로젝트 고유 코드와 UI 자산은 별도 라이선스 고지가 없는 한 프로젝트 소유자에게 권리가 있습니다."],
         ].map(([name, desc]) => `
           <article class="about-mini-card">
             <strong>${name}</strong>
@@ -1260,6 +1341,9 @@ function renderAboutBoard() {
           </article>
         `).join("")}
       </div>
+      <p class="about-license-note">
+        이 앱은 외부 서비스와 오픈소스 SDK를 함께 사용합니다. 각 구성 요소의 저작권과 라이선스는 해당 제공자의 고지와 약관을 따릅니다.
+      </p>
     </section>
 
     <section class="about-card developer-auth-card">
@@ -1419,7 +1503,7 @@ function renderStarredBoard() {
       const group = document.createElement("section");
       group.className = "starred-group";
       group.innerHTML = `
-        <h4>${escapeHtml(list.icon)} ${escapeHtml(list.name)}</h4>
+        <h4>${escapeHtml(list.name)}</h4>
         <div class="starred-task-list"></div>
         <div class="completed-section" ${completed.length === 0 ? "hidden" : ""}>
           <button class="completed-heading" type="button" aria-expanded="${completedExpanded}">
@@ -1477,7 +1561,7 @@ function renderMobileStarredBoard() {
     column.dataset.listName = list.name;
     column.innerHTML = `
       <div class="column-header">
-        <h3><span class="column-icon">${escapeHtml(list.icon)}</span>${escapeHtml(list.name)}</h3>
+        <h3>${escapeHtml(list.name)}</h3>
         <div class="column-actions">
           <span class="column-count" data-mobile-count="${starredTodos.length}">중요 ${starredTodos.length}</span>
         </div>
@@ -1555,6 +1639,7 @@ function createTaskCard(list, todo) {
   card.querySelector('[data-action="menu"]').addEventListener("click", (event) => {
     event.stopPropagation();
     activeListMenu = null;
+    activeListMenuSource = null;
     activeMenu = activeMenu === menuId ? null : menuId;
     render();
   });
@@ -1638,23 +1723,35 @@ function createQuickAddForm(list) {
     <div class="quick-add-options">
       <button type="button" data-action="today">오늘</button>
       <button type="button" data-action="tomorrow">내일</button>
-      <label class="quick-add-time" title="시간 설정">
-        <span>◷</span>
-        <input type="time" />
+      <label class="quick-add-date" title="날짜 설정">
+        <span>📅</span>
+        <input type="date" />
       </label>
-      <button class="quick-add-repeat" type="button" data-action="repeat" title="반복 설정">↔</button>
+      <button class="quick-add-time" type="button" title="시간 설정">
+        <span>◷</span>
+      </button>
     </div>
   `;
 
   const titleInput = form.querySelector(".quick-add-title");
-  const timeInput = form.querySelector('input[type="time"]');
+  const dateInput = form.querySelector('input[type="date"]');
+  const timeButton = form.querySelector(".quick-add-time");
   let dueDate = "";
-  let repeat = "none";
+  let dueTime = "09:00";
+  let dueAt = "";
   let isSavingQuickTask = false;
   let isOpeningDetails = false;
 
+  const updateDueAt = () => {
+    dueAt = dueDate ? `${dueDate}T${dueTime}` : "";
+    form.querySelector(".quick-add-date").classList.toggle("active", Boolean(dueDate));
+    form.querySelector(".quick-add-time").classList.toggle("active", Boolean(dueDate));
+  };
+
   const setDate = (date, button) => {
     dueDate = toDateInputValue(date);
+    dateInput.value = dueDate;
+    updateDueAt();
     form.querySelectorAll('[data-action="today"], [data-action="tomorrow"]').forEach((option) => {
       option.classList.toggle("active", option === button);
     });
@@ -1668,16 +1765,21 @@ function createQuickAddForm(list) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     setDate(tomorrow, event.currentTarget);
   });
-  timeInput.addEventListener("change", () => {
+  dateInput.addEventListener("change", () => {
+    dueDate = dateInput.value;
+    updateDueAt();
+    form.querySelectorAll('[data-action="today"], [data-action="tomorrow"]').forEach((option) => {
+      option.classList.remove("active");
+    });
+  });
+  timeButton.addEventListener("click", () => {
     if (!dueDate) {
       setDate(new Date(), form.querySelector('[data-action="today"]'));
     }
-  });
-  form.querySelector('[data-action="repeat"]').addEventListener("click", (event) => {
-    const repeats = ["none", "daily", "weekly", "monthly"];
-    repeat = repeats[(repeats.indexOf(repeat) + 1) % repeats.length];
-    event.currentTarget.classList.toggle("active", repeat !== "none");
-    event.currentTarget.title = repeatLabels[repeat];
+    openTimePicker(timeButton, dueTime, (time) => {
+      dueTime = time;
+      updateDueAt();
+    });
   });
   form.querySelector(".quick-add-details").addEventListener("click", () => {
     isOpeningDetails = true;
@@ -1685,8 +1787,8 @@ function createQuickAddForm(list) {
     quickAddListName = null;
     openTaskModal(list.name, null, {
       title,
-      dueAt: dueDate ? `${dueDate}T${timeInput.value || "09:00"}` : "",
-      repeat,
+      dueAt,
+      repeat: "none",
     });
   });
 
@@ -1696,6 +1798,8 @@ function createQuickAddForm(list) {
     }
     const title = titleInput.value.trim();
     if (!title) {
+      quickAddListName = null;
+      renderBoard();
       return;
     }
     isSavingQuickTask = true;
@@ -1703,9 +1807,9 @@ function createQuickAddForm(list) {
       id: nextTodoId(list),
       title,
       description: "",
-      dueAt: dueDate ? `${dueDate}T${timeInput.value || "09:00"}` : "",
+      dueAt,
       createdAt: toDatetimeLocalValue(new Date()),
-      repeat,
+      repeat: "none",
       completed: false,
       completedAt: "",
       starred: false,
@@ -1840,8 +1944,9 @@ function createTaskMenu(list, todo) {
     <div class="menu-section">
       <label class="list-menu-action task-menu-date">
         마감일 설정
-        <input type="date" value="${todo.dueAt ? todo.dueAt.slice(0, 10) : ""}" />
+        <input type="datetime-local" value="${todo.dueAt || ""}" />
       </label>
+      <button class="list-menu-action" type="button" data-action="ai-guide">AI 실행 가이드</button>
       <button class="list-menu-action" type="button" data-action="subtask">하위 할 일 추가</button>
       <button class="list-menu-action" type="button" data-action="edit">내용 수정</button>
       <button class="list-menu-action danger-action" type="button" data-action="delete">삭제</button>
@@ -1853,10 +1958,11 @@ function createTaskMenu(list, todo) {
   `;
 
   menu.querySelector("input").addEventListener("change", async (event) => {
-    todo.dueAt = event.target.value ? `${event.target.value}T09:00` : "";
+    todo.dueAt = event.target.value || "";
     activeMenu = null;
     await saveAndRender();
   });
+  menu.querySelector('[data-action="ai-guide"]').addEventListener("click", () => generateTaskGuide(todo));
   menu.querySelector('[data-action="subtask"]').addEventListener("click", () => addSubtask(list.name, todo.id));
   menu.querySelector('[data-action="edit"]').addEventListener("click", () => editTask(list.name, todo.id));
   menu.querySelector('[data-action="delete"]').addEventListener("click", () => deleteTask(list.name, todo.id));
@@ -1878,7 +1984,7 @@ function createTaskMenu(list, todo) {
 function renderTaskMeta(container, todo) {
   container.replaceChildren();
   if (todo.dueAt) {
-    container.append(createBadge(`📅 ${formatDate(todo.dueAt)}`, isOverdue(todo) ? "overdue" : ""));
+    container.append(createDueBadge(todo));
   }
   if (todo.repeat !== "none") {
     container.append(createBadge(repeatLabels[todo.repeat]));
@@ -1887,6 +1993,19 @@ function renderTaskMeta(container, todo) {
     const completed = todo.subtasks.filter((subtask) => subtask.completed).length;
     container.append(createBadge(`하위 ${completed}/${todo.subtasks.length}`));
   }
+}
+
+function createDueBadge(todo) {
+  const badge = document.createElement("button");
+  badge.type = "button";
+  badge.className = `badge due-badge ${isOverdue(todo) ? "overdue" : ""}`.trim();
+  badge.textContent = `📅 ${formatDate(todo.dueAt)}`;
+  badge.title = "날짜 및 시간 수정";
+  badge.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openDueEditor(badge, todo);
+  });
+  return badge;
 }
 
 function renderSubtasks(container, listName, todo) {
@@ -1911,6 +2030,95 @@ function createBadge(text, variant = "") {
   badge.className = `badge ${variant}`.trim();
   badge.textContent = text;
   return badge;
+}
+
+function openDueEditor(anchor, todo) {
+  closeFloatingPicker();
+  const picker = document.createElement("div");
+  picker.className = "floating-picker due-editor";
+  const currentDate = todo.dueAt ? todo.dueAt.slice(0, 10) : toDateInputValue(new Date());
+  const currentTime = todo.dueAt ? nearestHalfHour(todo.dueAt.slice(11, 16)) : "09:00";
+  let selectedTime = currentTime;
+  picker.innerHTML = `
+    <label>
+      <span>날짜</span>
+      <input type="date" value="${currentDate}" aria-label="날짜 선택" />
+    </label>
+    <span class="due-editor-label">시간</span>
+    <div class="time-picker-list"></div>
+    <div class="due-editor-actions">
+      <button type="button" data-action="clear">삭제</button>
+      <button type="button" data-action="save">저장</button>
+    </div>
+  `;
+  const dateInput = picker.querySelector("input");
+  const timeList = picker.querySelector(".time-picker-list");
+  populateTimePickerList(timeList, currentTime, (time) => {
+    selectedTime = time;
+    timeList.querySelectorAll("button").forEach((button) => {
+      button.classList.toggle("active", button.dataset.value === selectedTime);
+    });
+  });
+  picker.querySelector('[data-action="save"]').addEventListener("click", async () => {
+    todo.dueAt = dateInput.value ? `${dateInput.value}T${selectedTime}` : "";
+    closeFloatingPicker();
+    await saveAndRender();
+  });
+  picker.querySelector('[data-action="clear"]').addEventListener("click", async () => {
+    todo.dueAt = "";
+    closeFloatingPicker();
+    await saveAndRender();
+  });
+  document.body.append(picker);
+  placeFloatingPicker(anchor, picker);
+  dateInput.focus();
+}
+
+function openTimePicker(anchor, selectedTime, onSelect) {
+  closeFloatingPicker();
+  const picker = document.createElement("div");
+  picker.className = "floating-picker time-only-picker";
+  const list = document.createElement("div");
+  list.className = "time-picker-list";
+  picker.append(list);
+  populateTimePickerList(list, selectedTime, (time) => {
+    onSelect(time);
+    closeFloatingPicker();
+  });
+  document.body.append(picker);
+  placeFloatingPicker(anchor, picker);
+}
+
+function populateTimePickerList(container, selectedTime, onSelect) {
+  for (let minutes = 0; minutes < 24 * 60; minutes += 30) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const value = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = value === selectedTime ? "active" : "";
+    button.dataset.value = value;
+    button.textContent = formatTimeOption(hours, mins);
+    button.addEventListener("click", () => onSelect(value));
+    container.append(button);
+  }
+  requestAnimationFrame(() => {
+    container.querySelector(".active")?.scrollIntoView({ block: "center" });
+  });
+}
+
+function closeFloatingPicker() {
+  document.querySelector(".floating-picker")?.remove();
+}
+
+function placeFloatingPicker(anchor, picker) {
+  const rect = anchor.getBoundingClientRect();
+  const pickerRect = picker.getBoundingClientRect();
+  const padding = 10;
+  const left = Math.min(Math.max(rect.left, padding), window.innerWidth - pickerRect.width - padding);
+  const top = Math.min(rect.bottom + 8, window.innerHeight - pickerRect.height - padding);
+  picker.style.left = `${left}px`;
+  picker.style.top = `${Math.max(top, padding)}px`;
 }
 
 function visibleColumns() {
@@ -2069,7 +2277,7 @@ function todoKey(listName, todoId) {
   return `${listName}:${todoId}`;
 }
 
-async function updateList(previousName, nextName, icon) {
+async function updateList(previousName, nextName) {
   const list = findList(previousName);
   if (!list || !nextName) {
     return;
@@ -2080,7 +2288,7 @@ async function updateList(previousName, nextName, icon) {
   }
 
   list.name = nextName;
-  list.icon = LIST_ICONS.includes(icon) ? icon : DEFAULT_LIST_ICON;
+  list.icon = DEFAULT_LIST_ICON;
   if (previousName !== nextName && expandedCompletedLists.delete(previousName)) {
     expandedCompletedLists.add(nextName);
   }
@@ -2088,6 +2296,7 @@ async function updateList(previousName, nextName, icon) {
     state.currentListName = nextName;
   }
   activeListMenu = null;
+  activeListMenuSource = null;
   activeMenu = null;
   await saveAndRender();
 }
@@ -2120,6 +2329,7 @@ async function deleteList(listName) {
     state.currentListName = state.lists.find((list) => list.visible)?.name || state.lists[0].name;
   }
   activeListMenu = null;
+  activeListMenuSource = null;
   activeMenu = null;
   showUndoToast(`${listName} 목록을 삭제했습니다.`);
   await saveAndRender();
@@ -2503,7 +2713,7 @@ function openTaskModal(listName, todoId = null, draft = null) {
     ...state.lists.map((item) => {
       const option = document.createElement("option");
       option.value = item.name;
-      option.textContent = `${item.icon} ${item.name}`;
+      option.textContent = item.name;
       return option;
     }),
   );
@@ -2785,6 +2995,66 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+async function generateTaskGuide(todo) {
+  activeMenu = null;
+  render();
+  showUndoToast("AI 실행 가이드를 준비하는 중입니다.");
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "task-guide",
+        task_title: todo.title,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini endpoint failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const guide = data.guide;
+    if (!guide?.preparation || !guide?.nudges) {
+      throw new Error("Invalid task guide response");
+    }
+
+    alert(formatTaskGuide(guide));
+  } catch (error) {
+    console.error(error);
+    alert(formatTaskGuide(fallbackTaskGuide(todo.title)));
+  }
+}
+
+function fallbackTaskGuide(title) {
+  return {
+    task_title: title,
+    preparation: {
+      items: ["작업에 필요한 자료나 앱을 미리 열기", "방해받지 않을 15분 확보하기"],
+      tip: "처음부터 완성하려 하지 말고 바로 시작할 수 있는 가장 작은 단계만 정하세요.",
+    },
+    nudges: {
+      obstacle: "시작 기준을 크게 잡으면 준비만 하다가 미루기 쉽습니다.",
+      action_trigger: "지금 타이머 10분을 켜고 첫 단계만 끝내세요.",
+    },
+  };
+}
+
+function formatTaskGuide(guide) {
+  return [
+    `할 일: ${guide.task_title}`,
+    "",
+    "준비물/참고자료",
+    ...guide.preparation.items.map((item) => `- ${item}`),
+    "",
+    `팁: ${guide.preparation.tip}`,
+    "",
+    `장애물: ${guide.nudges.obstacle}`,
+    `행동 지침: ${guide.nudges.action_trigger}`,
+  ].join("\n");
 }
 
 async function generateDailyCoach() {
