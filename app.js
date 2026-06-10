@@ -119,8 +119,11 @@ const elements = {
   profileEmail: document.querySelector("#profile-email"),
   profileSync: document.querySelector("#profile-sync"),
   welcomeMessage: document.querySelector("#welcome-message"),
+  profileAboutButton: document.querySelector("#profile-about-button"),
+  profileDeveloperButton: document.querySelector("#profile-developer-button"),
   logoutButton: document.querySelector("#logout-button"),
   createTaskButton: document.querySelector("#create-task-button"),
+  mobileCreateTaskButton: document.querySelector("#mobile-create-task-button"),
   allViewButton: document.querySelector("#all-view-button"),
   starredViewButton: document.querySelector("#starred-view-button"),
   aboutViewButton: document.querySelector("#about-view-button"),
@@ -206,6 +209,26 @@ elements.profileButton.addEventListener("click", () => {
   setProfileMenuOpen(!profileMenuOpen);
 });
 
+elements.profileAboutButton.addEventListener("click", () => {
+  activeView = "about";
+  activeMenu = null;
+  activeListMenu = null;
+  setProfileMenuOpen(false);
+  render();
+});
+
+elements.profileDeveloperButton.addEventListener("click", async () => {
+  if (!isDeveloperUser()) {
+    return;
+  }
+  activeView = "developer";
+  activeMenu = null;
+  activeListMenu = null;
+  setProfileMenuOpen(false);
+  await loadFeedbackItems();
+  render();
+});
+
 elements.logoutButton.addEventListener("click", async () => {
   if (auth) {
     await signOut(auth);
@@ -224,12 +247,20 @@ elements.feedbackContent.addEventListener("input", updateFeedbackSubmitState);
 elements.feedbackModalForm.addEventListener("submit", submitFeedback);
 
 elements.createTaskButton.addEventListener("click", () => {
+  openCreateTaskFlow();
+});
+
+elements.mobileCreateTaskButton.addEventListener("click", () => {
+  openCreateTaskFlow();
+});
+
+function openCreateTaskFlow() {
   activeView = "all";
   activeMenu = null;
   activeListMenu = null;
   render();
   openTaskModal(state.currentListName);
-});
+}
 
 elements.taskModalClose.addEventListener("click", closeTaskModal);
 elements.taskModal.addEventListener("click", (event) => {
@@ -525,6 +556,7 @@ function normalizeState(data) {
 function setAppEnabled(enabled) {
   [
     elements.createTaskButton,
+    elements.mobileCreateTaskButton,
     elements.allViewButton,
     elements.starredViewButton,
     elements.aboutViewButton,
@@ -550,6 +582,7 @@ function renderSignedIn(user) {
   elements.profileEmail.textContent = user.email || "이메일 정보 없음";
   elements.profileButton.setAttribute("aria-label", `${displayName} 계정 옵션 열기`);
   elements.developerViewButton.hidden = !isDeveloperUser();
+  elements.profileDeveloperButton.hidden = !isDeveloperUser();
   if (!isDeveloperUser() && activeView === "developer") {
     activeView = "all";
   }
@@ -565,6 +598,7 @@ function renderSignedOut(message = "여러 기기 연동과 안정적인 백업�
   elements.profileWrap.hidden = true;
   elements.welcomeMessage.hidden = true;
   elements.developerViewButton.hidden = true;
+  elements.profileDeveloperButton.hidden = true;
   if (activeView === "developer") {
     activeView = "all";
   }
@@ -600,6 +634,8 @@ function renderViewButtons() {
   elements.starredViewButton.classList.toggle("active", activeView === "starred");
   elements.aboutViewButton.classList.toggle("active", activeView === "about");
   elements.developerViewButton.classList.toggle("active", activeView === "developer");
+  elements.profileAboutButton.classList.toggle("active", activeView === "about");
+  elements.profileDeveloperButton.classList.toggle("active", activeView === "developer");
 }
 
 function renderLists() {
@@ -625,7 +661,7 @@ function renderLists() {
 
     const selectButton = document.createElement("button");
     selectButton.type = "button";
-    selectButton.className = `list-select-button ${list.visible ? "active" : ""}`;
+    selectButton.className = `list-select-button ${list.visible ? "active" : ""} ${state.currentListName === list.name ? "current" : ""}`;
     selectButton.innerHTML = `
       <span class="list-name">
         <span class="list-icon">${escapeHtml(list.icon)}</span>
@@ -635,6 +671,10 @@ function renderLists() {
     `;
     selectButton.addEventListener("click", async () => {
       activeListMenu = null;
+      if (isMobileBoardLayout()) {
+        await selectMobileList(list);
+        return;
+      }
       await setListVisibility(list, !list.visible);
     });
 
@@ -708,6 +748,28 @@ async function setListVisibility(list, visible) {
     state.currentListName = state.lists.find((item) => item.visible)?.name || list.name;
   }
   await saveAndRender();
+}
+
+function isMobileBoardLayout() {
+  return window.matchMedia("(max-width: 560px)").matches;
+}
+
+async function selectMobileList(list) {
+  list.visible = true;
+  state.currentListName = list.name;
+  activeView = "all";
+  await saveAndRender();
+  requestAnimationFrame(() => {
+    const column = elements.columns.querySelector(`[data-list-name="${cssStringEscape(list.name)}"]`);
+    column?.scrollIntoView({ block: "nearest", inline: "start", behavior: "smooth" });
+  });
+}
+
+function cssStringEscape(value) {
+  if (window.CSS?.escape) {
+    return CSS.escape(value);
+  }
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 async function renameList(listName) {
@@ -882,6 +944,7 @@ function renderBoard() {
   columns.forEach((list) => {
     const column = document.createElement("article");
     column.className = "column";
+    column.dataset.listName = list.name;
     const todos = list.todos;
     const active = todos.filter((todo) => !todo.completed || recentlyCompleted.has(todoKey(list.name, todo.id)));
     const completed = todos.filter((todo) => todo.completed && !recentlyCompleted.has(todoKey(list.name, todo.id)));
@@ -890,7 +953,7 @@ function renderBoard() {
       <div class="column-header">
         <h3><span class="column-icon">${escapeHtml(list.icon)}</span>${escapeHtml(list.name)}</h3>
         <div class="column-actions">
-          <span class="column-count">완료됨 ${list.todos.filter((todo) => todo.completed).length}</span>
+          <span class="column-count" data-mobile-count="${list.todos.filter((todo) => todo.completed).length}">완료됨 ${list.todos.filter((todo) => todo.completed).length}</span>
           <span class="list-menu-wrap">
             <button class="list-edit-button ${activeListMenu === list.name ? "active" : ""}" type="button" aria-label="${escapeHtml(list.name)} 목록 메뉴">⋮</button>
           </span>
