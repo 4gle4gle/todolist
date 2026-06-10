@@ -18,9 +18,16 @@
     <div class="window-shell">
       <div class="app-layout">
         <aside class="sidebar" aria-label="작업 목록">
-          <div class="brand">
-            <img class="brand-logo" src="assets/icons/todobuddy-logo.png" alt="" />
-            <h1>투두버디</h1>
+          <div class="brand-row">
+            <button class="sidebar-toggle-button" id="sidebar-toggle-button" type="button" aria-label="왼쪽 목록 접기" aria-expanded="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            <button class="brand" id="brand-home-button" type="button" aria-label="투두버디 메인으로 이동">
+              <img class="brand-logo" src="assets/icons/todobuddy-logo.png" alt="" />
+              <span>투두버디</span>
+            </button>
           </div>
 
           <button class="create-button" id="create-task-button" type="button">

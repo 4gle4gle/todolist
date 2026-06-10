@@ -109,6 +109,7 @@ let mobileListSyncFrame = 0;
 let feedbackItems = [];
 let isFeedbackLoading = false;
 let isCurrentDeveloper = false;
+let isSidebarCollapsed = false;
 
 const elements = {
   userAvatar: document.querySelector("#user-avatar"),
@@ -125,6 +126,8 @@ const elements = {
   profileAboutButton: document.querySelector("#profile-about-button"),
   profileDeveloperButton: document.querySelector("#profile-developer-button"),
   logoutButton: document.querySelector("#logout-button"),
+  brandHomeButton: document.querySelector("#brand-home-button"),
+  sidebarToggleButton: document.querySelector("#sidebar-toggle-button"),
   createTaskButton: document.querySelector("#create-task-button"),
   mobileCreateTaskButton: document.querySelector("#mobile-create-task-button"),
   allViewButton: document.querySelector("#all-view-button"),
@@ -254,6 +257,11 @@ elements.logoutButton.addEventListener("click", async () => {
   }
 });
 
+elements.brandHomeButton.addEventListener("click", goHome);
+elements.sidebarToggleButton.addEventListener("click", () => {
+  setSidebarCollapsed(!isSidebarCollapsed);
+});
+
 elements.undoButton.addEventListener("click", undoLastDelete);
 elements.feedbackModalClose.addEventListener("click", closeFeedbackModal);
 elements.feedbackModal.addEventListener("click", (event) => {
@@ -318,7 +326,7 @@ elements.mobileQuickTaskStar.addEventListener("click", () => {
 });
 
 elements.columns.addEventListener("scroll", () => {
-  if (!isMobileBoardLayout() || activeView !== "all") {
+  if (!isMobileBoardLayout() || !["all", "starred"].includes(activeView)) {
     return;
   }
   if (mobileListSyncFrame) {
@@ -331,6 +339,29 @@ elements.allViewButton.addEventListener("click", () => {
   activeView = "all";
   render();
 });
+
+function goHome() {
+  activeView = "all";
+  activeMenu = null;
+  activeListMenu = null;
+  setProfileMenuOpen(false);
+  render();
+  requestAnimationFrame(() => {
+    if (isMobileBoardLayout()) {
+      const current = elements.columns.querySelector(`[data-list-name="${cssStringEscape(state.currentListName)}"]`);
+      current?.scrollIntoView({ block: "nearest", inline: "start", behavior: "smooth" });
+    } else {
+      elements.boardArea.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+    }
+  });
+}
+
+function setSidebarCollapsed(collapsed) {
+  isSidebarCollapsed = collapsed;
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  elements.sidebarToggleButton.setAttribute("aria-expanded", String(!collapsed));
+  elements.sidebarToggleButton.setAttribute("aria-label", collapsed ? "왼쪽 목록 펼치기" : "왼쪽 목록 접기");
+}
 
 elements.starredViewButton.addEventListener("click", () => {
   activeView = "starred";
@@ -1341,6 +1372,11 @@ function createFeedbackCard(item) {
 }
 
 function renderStarredBoard() {
+  if (isMobileBoardLayout()) {
+    renderMobileStarredBoard();
+    return;
+  }
+
   const starredLists = state.lists
     .map((list) => ({ ...list, todos: list.todos.filter((todo) => todo.starred) }))
     .filter((list) => list.todos.length > 0);
@@ -1417,6 +1453,76 @@ function renderStarredBoard() {
   }
 
   elements.columns.append(panel);
+}
+
+function renderMobileStarredBoard() {
+  const columns = visibleColumns();
+  const starredCount = state.lists.reduce((sum, list) => sum + list.todos.filter((todo) => todo.starred).length, 0);
+
+  elements.boardEyebrow.textContent = "중요 표시됨";
+  elements.boardTitle.textContent = "중요 표시됨";
+  elements.boardSummary.textContent = `중요 작업 ${starredCount}개`;
+  elements.characterStatus.hidden = true;
+  elements.columns.replaceChildren();
+
+  columns.forEach((list) => {
+    const starredTodos = list.todos.filter((todo) => todo.starred);
+    const active = starredTodos.filter((todo) => !todo.completed || recentlyCompleted.has(todoKey(list.name, todo.id)));
+    const completed = starredTodos.filter((todo) => todo.completed && !recentlyCompleted.has(todoKey(list.name, todo.id)));
+    const completedKey = `starred:${list.name}`;
+    const completedExpanded = expandedCompletedLists.has(completedKey);
+
+    const column = document.createElement("article");
+    column.className = "column starred-mobile-column";
+    column.dataset.listName = list.name;
+    column.innerHTML = `
+      <div class="column-header">
+        <h3><span class="column-icon">${escapeHtml(list.icon)}</span>${escapeHtml(list.name)}</h3>
+        <div class="column-actions">
+          <span class="column-count" data-mobile-count="${starredTodos.length}">중요 ${starredTodos.length}</span>
+        </div>
+      </div>
+      <button class="add-task-button" type="button">
+        <span>+</span>
+        중요 할 일 추가
+      </button>
+      <div class="task-list"></div>
+      <div class="completed-section" ${completed.length === 0 ? "hidden" : ""}>
+        <button class="completed-heading" type="button" aria-expanded="${completedExpanded}">
+          <span><span class="completed-chevron">${completedExpanded ? "⌄" : "›"}</span>완료된 항목</span>
+          <span>${completed.length}</span>
+        </button>
+        <div class="completed-list" ${completedExpanded ? "" : "hidden"}></div>
+      </div>
+    `;
+
+    column.querySelector(".add-task-button").addEventListener("click", (event) => {
+      event.stopPropagation();
+      openMobileQuickTask(list.name);
+    });
+
+    const taskList = column.querySelector(".task-list");
+    if (active.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "중요 표시된 할 일이 없습니다.";
+      taskList.append(empty);
+    } else {
+      active.forEach((todo) => taskList.append(createTaskCard(list, todo)));
+    }
+
+    const completedList = column.querySelector(".completed-list");
+    completed.forEach((todo) => completedList.append(createTaskCard(list, todo)));
+    column.querySelector(".completed-heading")?.addEventListener("click", () => {
+      if (expandedCompletedLists.has(completedKey)) {
+        expandedCompletedLists.delete(completedKey);
+      } else {
+        expandedCompletedLists.add(completedKey);
+      }
+      renderStarredBoard();
+    });
+    elements.columns.append(column);
+  });
 }
 
 function createTaskCard(list, todo) {

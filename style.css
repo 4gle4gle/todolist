@@ -86,11 +86,50 @@ select:disabled {
   box-shadow: 10px 0 40px rgba(124, 72, 32, 0.07);
 }
 
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: max(24px, env(safe-area-inset-top)) 24px 22px;
+}
+
 .brand {
   display: flex;
   align-items: center;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
   gap: 8px;
-  padding: max(24px, env(safe-area-inset-top)) 24px 22px;
+}
+
+.brand:hover {
+  color: var(--accent-strong);
+}
+
+.sidebar-toggle-button {
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 241, 232, 0.78);
+  color: var(--accent-strong);
+}
+
+.sidebar-toggle-button:hover {
+  background: var(--accent-hover);
+}
+
+.sidebar-toggle-button span {
+  width: 15px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .brand-mark {
@@ -113,11 +152,45 @@ select:disabled {
   box-shadow: 0 8px 18px rgba(124, 72, 32, 0.12);
 }
 
-.brand h1 {
+.brand span {
   margin: 0;
   color: var(--text);
   font-size: 20px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.sidebar-collapsed .app-layout {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+
+body.sidebar-collapsed .sidebar {
+  align-items: center;
+}
+
+body.sidebar-collapsed .brand-row {
+  flex-direction: column;
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+body.sidebar-collapsed .brand {
+  justify-content: center;
+}
+
+body.sidebar-collapsed .brand span,
+body.sidebar-collapsed .create-button,
+body.sidebar-collapsed .view-nav,
+body.sidebar-collapsed .list-section,
+body.sidebar-collapsed .sidebar-account {
+  display: none;
+}
+
+body.sidebar-collapsed .columns {
+  min-width: 0;
+  justify-content: center;
 }
 
 .google-button,
@@ -2376,17 +2449,11 @@ select:disabled {
     padding-bottom: 12px;
   }
 
-  .brand {
+  .brand-row {
     padding: max(16px, env(safe-area-inset-top)) 16px 14px;
   }
 
-  .brand-mark {
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-  }
-
-  .brand h1 {
+  .brand span {
     font-size: 18px;
   }
 
@@ -2695,10 +2762,18 @@ select:disabled {
     box-shadow: 0 12px 36px rgba(124, 72, 32, 0.08);
   }
 
-  .brand {
+  .brand-row {
     justify-content: center;
     min-height: 68px;
     padding: max(12px, env(safe-area-inset-top)) 68px 4px;
+  }
+
+  .sidebar-toggle-button {
+    display: none;
+  }
+
+  .brand {
+    justify-content: center;
   }
 
   .brand-mark {
@@ -2712,7 +2787,7 @@ select:disabled {
     border-radius: 14px;
   }
 
-  .brand h1 {
+  .brand span {
     color: var(--text);
     font-size: 22px;
     font-weight: 800;
@@ -3054,6 +3129,10 @@ select:disabled {
   .column-count::after {
     content: "완료됨 " attr(data-mobile-count);
     font-size: 13px;
+  }
+
+  .starred-mobile-column .column-count::after {
+    content: "중요 " attr(data-mobile-count);
   }
 
   .list-edit-button {
