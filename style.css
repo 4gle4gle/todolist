@@ -621,6 +621,11 @@ select:disabled {
   display: none;
 }
 
+.mobile-list-add-item,
+.mobile-quick-task {
+  display: none;
+}
+
 .board-area {
   min-width: 0;
   overflow: auto;
@@ -2702,6 +2707,7 @@ select:disabled {
   .section-label,
   .list-form,
   .welcome-message,
+  .view-nav #all-view-button,
   .view-nav #about-view-button,
   .view-nav #developer-view-button {
     display: none !important;
@@ -2723,20 +2729,32 @@ select:disabled {
   }
 
   .view-nav {
+    grid-row: 2;
+    grid-column: 1;
+    z-index: 2;
+    width: 48px;
     min-height: 36px;
     align-items: end;
+    padding: 0 0 0 12px;
+    overflow: visible;
   }
 
   .view-nav button {
+    justify-content: center;
+    width: 36px;
     min-height: 36px;
-    flex: 0 0 auto;
+    flex: 0 0 36px;
     gap: 8px;
     border-radius: 0;
-    padding: 0 10px 9px;
+    padding: 0 0 9px;
     background: transparent !important;
     color: var(--muted);
-    font-size: 15px;
+    font-size: 0;
     font-weight: 750;
+  }
+
+  .view-nav #starred-view-button {
+    font-size: 0;
   }
 
   .view-nav button.active {
@@ -2748,23 +2766,25 @@ select:disabled {
   .list-select-button.current::after {
     content: "";
     position: absolute;
-    right: 12px;
+    right: 4px;
     bottom: 0;
-    left: 12px;
+    left: 4px;
     height: 3px;
     border-radius: 999px 999px 0 0;
     background: var(--accent);
   }
 
   .view-nav button span {
-    font-size: 18px;
+    font-size: 22px;
   }
 
   .list-section {
+    grid-row: 2;
+    grid-column: 1;
     flex: 0 0 auto;
     min-height: 0;
     overflow: visible;
-    padding: 0 0 10px;
+    padding: 0 0 10px 50px;
   }
 
   .list-nav {
@@ -2826,6 +2846,30 @@ select:disabled {
     color: var(--accent-strong);
     font-size: 12px;
     font-weight: 800;
+  }
+
+  .mobile-list-add-item {
+    display: block;
+  }
+
+  .mobile-list-add-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 40px;
+    border: 0;
+    border-radius: 0;
+    padding: 0 10px 10px;
+    background: transparent;
+    color: var(--accent-strong);
+    font-size: 14px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .mobile-list-add-button span:first-child {
+    font-size: 18px;
+    line-height: 1;
   }
 
   .sidebar-account {
@@ -3161,6 +3205,84 @@ select:disabled {
 
   .mobile-create-button:disabled {
     opacity: 0.42;
+  }
+
+  .mobile-quick-task {
+    position: fixed;
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+    z-index: 210;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--glass-line);
+    border-radius: 18px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: 0 18px 44px rgba(124, 72, 32, 0.2);
+  }
+
+  .mobile-quick-task[hidden] {
+    display: none !important;
+  }
+
+  .mobile-quick-task input[type="text"] {
+    min-width: 0;
+    height: 44px;
+    border: 0;
+    border-radius: 13px;
+    padding: 0 12px;
+    background: rgba(255, 241, 232, 0.62);
+    color: var(--text);
+    outline: none;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .mobile-quick-task input[type="text"]:focus {
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.18);
+  }
+
+  .mobile-quick-task-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mobile-quick-task-actions button,
+  .mobile-quick-task-actions label {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .mobile-quick-task-actions button:hover,
+  .mobile-quick-task-actions label:hover,
+  .mobile-quick-task[data-starred="true"] #mobile-quick-task-star,
+  .mobile-quick-task[data-has-due="true"] label:has(#mobile-quick-task-due) {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+
+  .mobile-quick-task-actions input[type="datetime-local"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
   }
 
   .task-modal,
